@@ -1,0 +1,259 @@
+0 verbose cli /usr/local/bin/node /usr/local/bin/npm
+1 info using npm@10.9.3
+2 info using node@v22.20.0
+3 silly config load:file:/usr/local/lib/node_modules/npm/npmrc
+4 silly config load:file:/Users/kahnchan/Developer/figmaExt/.npmrc
+5 silly config load:file:/Users/kahnchan/.npmrc
+6 silly config load:file:/usr/local/etc/npmrc
+7 verbose title npm install html-inline-script-webpack-plugin
+8 verbose argv "install" "--save-dev" "html-inline-script-webpack-plugin"
+9 verbose logfile logs-max:10 dir:/Users/kahnchan/Developer/figmaExt/.npm-cache/_logs/2026-01-11T12_15_01_157Z-
+10 verbose logfile /Users/kahnchan/Developer/figmaExt/.npm-cache/_logs/2026-01-11T12_15_01_157Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4345298944 maxSize:1086324736 maxEntrySize:543162368
+13 silly idealTree buildDeps
+14 silly fetch manifest html-inline-script-webpack-plugin@*
+15 silly packumentCache full:https://registry.npmjs.org/html-inline-script-webpack-plugin cache-miss
+16 http fetch GET 200 https://registry.npmjs.org/html-inline-script-webpack-plugin 374ms (cache miss)
+17 silly packumentCache full:https://registry.npmjs.org/html-inline-script-webpack-plugin set size:undefined disposed:false
+18 silly fetch manifest html-webpack-plugin@^5.6.0
+19 silly packumentCache full:https://registry.npmjs.org/html-webpack-plugin cache-miss
+20 http fetch GET 200 https://registry.npmjs.org/html-webpack-plugin 86ms (cache revalidated)
+21 silly packumentCache full:https://registry.npmjs.org/html-webpack-plugin set size:489636 disposed:false
+22 silly fetch manifest @rspack/core@0.x || 1.x
+23 silly packumentCache full:https://registry.npmjs.org/@rspack%2fcore cache-miss
+24 http fetch GET 200 https://registry.npmjs.org/@rspack%2fcore 244ms (cache revalidated)
+25 silly packumentCache full:https://registry.npmjs.org/@rspack%2fcore set size:4296725 disposed:false
+26 silly fetch manifest @swc/helpers@>=0.5.1
+27 silly packumentCache full:https://registry.npmjs.org/@swc%2fhelpers cache-miss
+28 http fetch GET 200 https://registry.npmjs.org/@swc%2fhelpers 283ms (cache revalidated)
+29 silly packumentCache full:https://registry.npmjs.org/@swc%2fhelpers set size:655395 disposed:false
+30 silly fetch manifest webpack@^5.90.3
+31 silly packumentCache full:https://registry.npmjs.org/webpack cache-miss
+32 http fetch GET 200 https://registry.npmjs.org/webpack 104ms (cache revalidated)
+33 silly packumentCache full:https://registry.npmjs.org/webpack set size:4926367 disposed:false
+34 silly placeDep ROOT html-inline-script-webpack-plugin@3.2.1 OK for: onekey-figma-plugins@0.1.0 want: *
+35 silly reify moves {}
+36 silly audit bulk request {
+36 silly audit   '@discoveryjs/json-ext': [ '0.5.7' ],
+36 silly audit   '@figma/plugin-typings': [ '1.121.0' ],
+36 silly audit   '@jridgewell/gen-mapping': [ '0.3.13' ],
+36 silly audit   '@jridgewell/resolve-uri': [ '3.1.2' ],
+36 silly audit   '@jridgewell/source-map': [ '0.3.11' ],
+36 silly audit   '@jridgewell/sourcemap-codec': [ '1.5.5' ],
+36 silly audit   '@jridgewell/trace-mapping': [ '0.3.31' ],
+36 silly audit   '@nodelib/fs.scandir': [ '2.1.5' ],
+36 silly audit   '@nodelib/fs.stat': [ '2.0.5' ],
+36 silly audit   '@nodelib/fs.walk': [ '1.2.8' ],
+36 silly audit   '@sindresorhus/merge-streams': [ '2.3.0' ],
+36 silly audit   '@types/dompurify': [ '3.0.5' ],
+36 silly audit   '@types/eslint': [ '9.6.1' ],
+36 silly audit   '@types/eslint-scope': [ '3.7.7' ],
+36 silly audit   '@types/estree': [ '1.0.8' ],
+36 silly audit   '@types/html-minifier-terser': [ '6.1.0' ],
+36 silly audit   '@types/json-schema': [ '7.0.15' ],
+36 silly audit   '@types/node': [ '25.0.6' ],
+36 silly audit   '@types/prop-types': [ '15.7.15' ],
+36 silly audit   '@types/react': [ '18.3.27' ],
+36 silly audit   '@types/react-dom': [ '18.3.7' ],
+36 silly audit   '@types/trusted-types': [ '2.0.7' ],
+36 silly audit   '@webassemblyjs/ast': [ '1.14.1' ],
+36 silly audit   '@webassemblyjs/floating-point-hex-parser': [ '1.13.2' ],
+36 silly audit   '@webassemblyjs/helper-api-error': [ '1.13.2' ],
+36 silly audit   '@webassemblyjs/helper-buffer': [ '1.14.1' ],
+36 silly audit   '@webassemblyjs/helper-numbers': [ '1.13.2' ],
+36 silly audit   '@webassemblyjs/helper-wasm-bytecode': [ '1.13.2' ],
+36 silly audit   '@webassemblyjs/helper-wasm-section': [ '1.14.1' ],
+36 silly audit   '@webassemblyjs/ieee754': [ '1.13.2' ],
+36 silly audit   '@webassemblyjs/leb128': [ '1.13.2' ],
+36 silly audit   '@webassemblyjs/utf8': [ '1.13.2' ],
+36 silly audit   '@webassemblyjs/wasm-edit': [ '1.14.1' ],
+36 silly audit   '@webassemblyjs/wasm-gen': [ '1.14.1' ],
+36 silly audit   '@webassemblyjs/wasm-opt': [ '1.14.1' ],
+36 silly audit   '@webassemblyjs/wasm-parser': [ '1.14.1' ],
+36 silly audit   '@webassemblyjs/wast-printer': [ '1.14.1' ],
+36 silly audit   '@webpack-cli/configtest': [ '2.1.1' ],
+36 silly audit   '@webpack-cli/info': [ '2.0.2' ],
+36 silly audit   '@webpack-cli/serve': [ '2.0.5' ],
+36 silly audit   '@xtuc/ieee754': [ '1.2.0' ],
+36 silly audit   '@xtuc/long': [ '4.2.2' ],
+36 silly audit   acorn: [ '8.15.0' ],
+36 silly audit   'acorn-import-phases': [ '1.0.4' ],
+36 silly audit   ajv: [ '8.17.1' ],
+36 silly audit   'ajv-formats': [ '2.1.1' ],
+36 silly audit   'ajv-keywords': [ '5.1.0' ],
+36 silly audit   'ansi-regex': [ '5.0.1' ],
+36 silly audit   'ansi-styles': [ '4.3.0' ],
+36 silly audit   'baseline-browser-mapping': [ '2.9.14' ],
+36 silly audit   boolbase: [ '1.0.0' ],
+36 silly audit   braces: [ '3.0.3' ],
+36 silly audit   browserslist: [ '4.28.1' ],
+36 silly audit   'buffer-from': [ '1.1.2' ],
+36 silly audit   'camel-case': [ '4.1.2' ],
+36 silly audit   'caniuse-lite': [ '1.0.30001764' ],
+36 silly audit   chalk: [ '4.1.2' ],
+36 silly audit   'chrome-trace-event': [ '1.0.4' ],
+36 silly audit   'clean-css': [ '5.3.3' ],
+36 silly audit   'clone-deep': [ '4.0.1' ],
+36 silly audit   'color-convert': [ '2.0.1' ],
+36 silly audit   'color-name': [ '1.1.4' ],
+36 silly audit   colorette: [ '2.0.20' ],
+36 silly audit   commander: [ '8.3.0', '2.20.3', '10.0.1' ],
+36 silly audit   'copy-webpack-plugin': [ '12.0.2' ],
+36 silly audit   'cross-spawn': [ '7.0.6' ],
+36 silly audit   'css-loader': [ '6.11.0' ],
+36 silly audit   'css-select': [ '4.3.0' ],
+36 silly audit   'css-what': [ '6.2.2' ],
+36 silly audit   cssesc: [ '3.0.0' ],
+36 silly audit   csstype: [ '3.2.3' ],
+36 silly audit   'dom-converter': [ '0.2.0' ],
+36 silly audit   'dom-serializer': [ '1.4.1' ],
+36 silly audit   domelementtype: [ '2.3.0' ],
+36 silly audit   domhandler: [ '4.3.1' ],
+36 silly audit   dompurify: [ '3.3.1' ],
+36 silly audit   domutils: [ '2.8.0' ],
+36 silly audit   'dot-case': [ '3.0.4' ],
+36 silly audit   'electron-to-chromium': [ '1.5.267' ],
+36 silly audit   'enhanced-resolve': [ '5.18.4' ],
+36 silly audit   entities: [ '2.2.0' ],
+36 silly audit   envinfo: [ '7.21.0' ],
+36 silly audit   'es-module-lexer': [ '2.0.0' ],
+36 silly audit   escalade: [ '3.2.0' ],
+36 silly audit   'eslint-scope': [ '5.1.1' ],
+36 silly audit   esrecurse: [ '4.3.0' ],
+36 silly audit   estraverse: [ '5.3.0', '4.3.0' ],
+36 silly audit   events: [ '3.3.0' ],
+36 silly audit   'fast-deep-equal': [ '3.1.3' ],
+36 silly audit   'fast-glob': [ '3.3.3' ],
+36 silly audit   'glob-parent': [ '5.1.2', '6.0.2' ],
+36 silly audit   'fast-uri': [ '3.1.0' ],
+36 silly audit   'fastest-levenshtein': [ '1.0.16' ],
+36 silly audit   fastq: [ '1.20.1' ],
+36 silly audit   'fill-range': [ '7.1.1' ],
+36 silly audit   'find-up': [ '4.1.0' ],
+36 silly audit   flat: [ '5.0.2' ],
+36 silly audit   'function-bind': [ '1.1.2' ],
+36 silly audit   'glob-to-regexp': [ '0.4.1' ],
+36 silly audit   globby: [ '14.1.0' ],
+36 silly audit   'graceful-fs': [ '4.2.11' ],
+36 silly audit   'has-flag': [ '4.0.0' ],
+36 silly audit   hasown: [ '2.0.2' ],
+36 silly audit   he: [ '1.2.0' ],
+36 silly audit   'html-minifier-terser': [ '6.1.0' ],
+36 silly audit   'html-webpack-plugin': [ '5.6.5' ],
+36 silly audit   htmlparser2: [ '6.1.0' ],
+36 silly audit   'icss-utils': [ '5.1.0' ],
+36 silly audit   ignore: [ '7.0.5' ],
+36 silly audit   'import-local': [ '3.2.0' ],
+36 silly audit   interpret: [ '3.1.1' ],
+36 silly audit   'is-core-module': [ '2.16.1' ],
+36 silly audit   'is-extglob': [ '2.1.1' ],
+36 silly audit   'is-glob': [ '4.0.3' ],
+36 silly audit   'is-number': [ '7.0.0' ],
+36 silly audit   'is-plain-object': [ '2.0.4' ],
+36 silly audit   isexe: [ '2.0.0' ],
+36 silly audit   isobject: [ '3.0.1' ],
+36 silly audit   'jest-worker': [ '27.5.1' ],
+36 silly audit   'supports-color': [ '8.1.1', '7.2.0' ],
+36 silly audit   'js-tokens': [ '4.0.0' ],
+36 silly audit   'json-parse-even-better-errors': [ '2.3.1' ],
+36 silly audit   'json-schema-traverse': [ '1.0.0' ],
+36 silly audit   'kind-of': [ '6.0.3' ],
+36 silly audit   'loader-runner': [ '4.3.1' ],
+36 silly audit   'locate-path': [ '5.0.0' ],
+36 silly audit   lodash: [ '4.17.21' ],
+36 silly audit   'loose-envify': [ '1.4.0' ],
+36 silly audit   'lower-case': [ '2.0.2' ],
+36 silly audit   marked: [ '11.2.0' ],
+36 silly audit   'merge-stream': [ '2.0.0' ],
+36 silly audit   merge2: [ '1.4.1' ],
+36 silly audit   micromatch: [ '4.0.8' ],
+36 silly audit   'mime-db': [ '1.52.0' ],
+36 silly audit   'mime-types': [ '2.1.35' ],
+36 silly audit   nanoid: [ '3.3.11' ],
+36 silly audit   'neo-async': [ '2.6.2' ],
+36 silly audit   'no-case': [ '3.0.4' ],
+36 silly audit   'node-releases': [ '2.0.27' ],
+36 silly audit   'normalize-path': [ '3.0.0' ],
+36 silly audit   'nth-check': [ '2.1.1' ],
+36 silly audit   'p-limit': [ '2.3.0' ],
+36 silly audit   'p-locate': [ '4.1.0' ],
+36 silly audit   'p-try': [ '2.2.0' ],
+36 silly audit   'param-case': [ '3.0.4' ],
+36 silly audit   'pascal-case': [ '3.1.2' ],
+36 silly audit   'path-exists': [ '4.0.0' ],
+36 silly audit   'path-key': [ '3.1.1' ],
+36 silly audit   'path-parse': [ '1.0.7' ],
+36 silly audit   'path-type': [ '6.0.0' ],
+36 silly audit   picocolors: [ '1.1.1' ],
+36 silly audit   picomatch: [ '2.3.1' ],
+36 silly audit   'pkg-dir': [ '4.2.0' ],
+36 silly audit   postcss: [ '8.5.6' ],
+36 silly audit   'postcss-modules-extract-imports': [ '3.1.0' ],
+36 silly audit   'postcss-modules-local-by-default': [ '4.2.0' ],
+36 silly audit   'postcss-modules-scope': [ '3.2.1' ],
+36 silly audit   'postcss-modules-values': [ '4.0.0' ],
+36 silly audit   'postcss-selector-parser': [ '7.1.1' ],
+36 silly audit   'postcss-value-parser': [ '4.2.0' ],
+36 silly audit   'pretty-error': [ '4.0.0' ],
+36 silly audit   'queue-microtask': [ '1.2.3' ],
+36 silly audit   randombytes: [ '2.1.0' ],
+36 silly audit   react: [ '18.3.1' ],
+36 silly audit   'react-dom': [ '18.3.1' ],
+36 silly audit   rechoir: [ '0.8.0' ],
+36 silly audit   relateurl: [ '0.2.7' ],
+36 silly audit   renderkid: [ '3.0.0' ],
+36 silly audit   'require-from-string': [ '2.0.2' ],
+36 silly audit   resolve: [ '1.22.11' ],
+36 silly audit   'resolve-cwd': [ '3.0.0' ],
+36 silly audit   'resolve-from': [ '5.0.0' ],
+36 silly audit   reusify: [ '1.1.0' ],
+36 silly audit   'run-parallel': [ '1.2.0' ],
+36 silly audit   'safe-buffer': [ '5.2.1' ],
+36 silly audit   scheduler: [ '0.23.2' ],
+36 silly audit   'schema-utils': [ '4.3.3' ],
+36 silly audit   semver: [ '7.7.3' ],
+36 silly audit   'serialize-javascript': [ '6.0.2' ],
+36 silly audit   'shallow-clone': [ '3.0.1' ],
+36 silly audit   'shebang-command': [ '2.0.0' ],
+36 silly audit   'shebang-regex': [ '3.0.0' ],
+36 silly audit   slash: [ '5.1.0' ],
+36 silly audit   'source-map': [ '0.6.1', '0.7.6' ],
+36 silly audit   'source-map-js': [ '1.2.1' ],
+36 silly audit   'source-map-support': [ '0.5.21' ],
+36 silly audit   'strip-ansi': [ '6.0.1' ],
+36 silly audit   'style-loader': [ '3.3.4' ],
+36 silly audit   'supports-preserve-symlinks-flag': [ '1.0.0' ],
+36 silly audit   tapable: [ '2.3.0' ],
+36 silly audit   terser: [ '5.44.1' ],
+36 silly audit   'terser-webpack-plugin': [ '5.3.16' ],
+36 silly audit   'to-regex-range': [ '5.0.1' ],
+36 silly audit   'ts-loader': [ '9.5.4' ],
+36 silly audit   tslib: [ '2.8.1' ],
+36 silly audit   typescript: [ '5.9.3' ],
+36 silly audit   'undici-types': [ '7.16.0' ],
+36 silly audit   'unicorn-magic': [ '0.3.0' ],
+36 silly audit   'update-browserslist-db': [ '1.2.3' ],
+36 silly audit   'util-deprecate': [ '1.0.2' ],
+36 silly audit   utila: [ '0.4.0' ],
+36 silly audit   watchpack: [ '2.5.0' ],
+36 silly audit   webpack: [ '5.104.1' ],
+36 silly audit   'webpack-cli': [ '5.1.4' ],
+36 silly audit   'webpack-merge': [ '5.10.0' ],
+36 silly audit   'webpack-sources': [ '3.3.3' ],
+36 silly audit   which: [ '2.0.2' ],
+36 silly audit   wildcard: [ '2.0.1' ],
+36 silly audit   'html-inline-script-webpack-plugin': [ '3.2.1' ]
+36 silly audit }
+37 http cache html-inline-script-webpack-plugin@https://registry.npmjs.org/html-inline-script-webpack-plugin/-/html-inline-script-webpack-plugin-3.2.1.tgz 0ms (cache hit)
+38 silly tarball no local data for html-inline-script-webpack-plugin@https://registry.npmjs.org/html-inline-script-webpack-plugin/-/html-inline-script-webpack-plugin-3.2.1.tgz. Extracting by manifest.
+39 http fetch GET 200 https://registry.npmjs.org/html-inline-script-webpack-plugin/-/html-inline-script-webpack-plugin-3.2.1.tgz 205ms (cache miss)
+40 http fetch POST 200 https://registry.npmjs.org/-/npm/v1/security/advisories/bulk 244ms
+41 silly audit report {}
+42 silly ADD node_modules/html-inline-script-webpack-plugin
+43 verbose cwd /Users/kahnchan/Developer/figmaExt
+44 verbose os Darwin 25.1.0
+45 verbose node v22.20.0
+46 verbose npm  v10.9.3
+47 verbose exit 0
+48 info ok
