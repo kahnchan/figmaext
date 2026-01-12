@@ -68,10 +68,17 @@ export type UIToPluginMessage =
   | { type: 'EXPORT_TRACKING'; format: 'csv' | 'json' }
   | { type: 'CREATE_TRACKING_TABLE' };  // 在 Figma 中创建埋点表格
 
+export interface LoadingStatus {
+  isLoading: boolean;
+  message?: string;
+  progress?: { current: number; total: number };
+}
+
 export type PluginToUIMessage =
   | { type: 'INIT_DATA'; settings: Settings; autoSync: boolean; mode: Mode }
   | { type: 'SCAN_CONTEXT'; context: ScanContext | null }
   | { type: 'PRD_RESULT'; result: PRDResult | null }
   | { type: 'TRACKING_EVENTS'; events: TrackingEvent[] }
   | { type: 'EXPORT_DATA'; format: 'csv' | 'json'; data: string }
+  | { type: 'LOADING_STATUS'; status: LoadingStatus }
   | { type: 'ERROR'; message: string };

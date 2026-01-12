@@ -66,9 +66,23 @@ async function doSyncPRD(ctx?: ReturnType<typeof scanSelectedFrame>) {
   }
 
   try {
+    // Show loading
+    post({ 
+      type: 'LOADING_STATUS', 
+      status: { 
+        isLoading: true, 
+        message: '正在生成 PRD...'
+      } 
+    });
+    
     const result = await syncPRD(settings, context);
+    
+    // Hide loading
+    post({ type: 'LOADING_STATUS', status: { isLoading: false } });
     post({ type: 'PRD_RESULT', result });
   } catch (e) {
+    // Hide loading on error
+    post({ type: 'LOADING_STATUS', status: { isLoading: false } });
     post({ type: 'ERROR', message: String((e as Error).message || e) });
   }
 }
@@ -84,12 +98,39 @@ async function doGenerateTracking() {
     return;
   }
 
+  // Show loading in UI
+  post({ 
+    type: 'LOADING_STATUS', 
+    status: { 
+      isLoading: true, 
+      message: `正在为 ${nodes.length} 个元素生成埋点...`,
+      progress: { current: 0, total: nodes.length }
+    } 
+  });
+
+  figma.notify(`正在为 ${nodes.length} 个元素生成埋点...`);
+
   const next: TrackingEvent[] = [];
 
-  for (const n of nodes) {
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
     const existing = readTrackingFromLayer(n.nodeId);
 
     try {
+      // Update progress
+      post({ 
+        type: 'LOADING_STATUS', 
+        status: { 
+          isLoading: true, 
+          message: `AI 正在分析元素 ${i + 1}/${nodes.length}`,
+          progress: { current: i + 1, total: nodes.length }
+        } 
+      });
+      
+      if (nodes.length > 1) {
+        figma.notify(`AI 正在分析第 ${i + 1}/${nodes.length} 个元素...`);
+      }
+      
       // Get screenshot of the element
       const screenshotBase64 = await exportNodeAsBase64(n.nodeId, 256);
       
@@ -136,6 +177,11 @@ async function doGenerateTracking() {
 
   trackingEvents = next;
   await saveTrackingEvents();
+  
+  // Hide loading
+  post({ type: 'LOADING_STATUS', status: { isLoading: false } });
+  
+  figma.notify(`✓ 已为 ${next.length} 个元素生成埋点`);
 }
 
 async function doScanPageForTracking() {
@@ -169,15 +215,34 @@ async function doScanPageForTracking() {
     return;
   }
   
+  // Show loading in UI
+  post({ 
+    type: 'LOADING_STATUS', 
+    status: { 
+      isLoading: true, 
+      message: '正在截图并分析页面...'
+    } 
+  });
+  
   figma.notify('正在截图并分析页面...');
   
   // Get page screenshot
   const pageScreenshotBase64 = await exportNodeAsBase64(frameToAnalyze.id, 1200);
   
   if (!pageScreenshotBase64) {
+    post({ type: 'LOADING_STATUS', status: { isLoading: false } });
     post({ type: 'ERROR', message: '截图失败，请重试' });
     return;
   }
+  
+  // Update loading status
+  post({ 
+    type: 'LOADING_STATUS', 
+    status: { 
+      isLoading: true, 
+      message: '正在收集页面元素信息...'
+    } 
+  });
   
   // Collect all element names as hints (low weight reference)
   const elementHints: ElementHint[] = [];
@@ -211,6 +276,15 @@ async function doScanPageForTracking() {
     }
   }
   
+  // Update loading status
+  post({ 
+    type: 'LOADING_STATUS', 
+    status: { 
+      isLoading: true, 
+      message: 'AI 正在分析页面中的交互元素...'
+    } 
+  });
+  
   figma.notify('AI 正在分析页面中的交互元素...');
   
   try {
@@ -241,8 +315,13 @@ async function doScanPageForTracking() {
     trackingEvents = next;
     await saveTrackingEvents();
     
+    // Hide loading
+    post({ type: 'LOADING_STATUS', status: { isLoading: false } });
+    
     figma.notify(`✓ AI 识别了 ${next.length} 个交互元素并生成埋点`);
   } catch (e) {
+    // Hide loading on error
+    post({ type: 'LOADING_STATUS', status: { isLoading: false } });
     post({ type: 'ERROR', message: `分析失败: ${(e as Error).message}` });
   }
 }

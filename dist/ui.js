@@ -1088,6 +1088,45 @@ html, body {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* Loading Overlay */
+.loadingOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  backdrop-filter: blur(4px);
+}
+
+.loadingCard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 28px 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* Spinner */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 `, ""]);
 // Exports
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (___CSS_LOADER_EXPORT___);
@@ -5265,6 +5304,11 @@ function TrackerView({ context, events }) {
                                             }
                                         }, title: "\u5220\u9664\u6240\u6709\u57CB\u70B9", children: "\uD83D\uDDD1 \u5168\u90E8\u5220\u9664" })] })] }))] }), events.length === 0 ? ((0,jsx_runtime.jsx)("div", { className: "card", children: (0,jsx_runtime.jsxs)("div", { className: "small", children: [(0,jsx_runtime.jsx)("strong", { children: "\u4F7F\u7528\u65B9\u6CD5\uFF1A" }), (0,jsx_runtime.jsx)("br", {}), (0,jsx_runtime.jsx)("br", {}), "1. \u9009\u62E9\u4E00\u4E2A Frame\uFF08\u6574\u4E2A\u9875\u9762\uFF09", (0,jsx_runtime.jsx)("br", {}), "2. \u70B9\u51FB ", (0,jsx_runtime.jsx)("strong", { children: "Scan Page" }), " \u81EA\u52A8\u8BC6\u522B\u6240\u6709\u53EF\u4EA4\u4E92\u5143\u7D20", (0,jsx_runtime.jsx)("br", {}), "3. AI \u4F1A\u6279\u91CF\u751F\u6210\u57CB\u70B9\u5EFA\u8BAE", (0,jsx_runtime.jsx)("br", {}), "4. \u590D\u6838\uFF1A\u52FE\u9009\u9700\u8981\u7684\uFF0C\u5220\u9664\u4E0D\u9700\u8981\u7684", (0,jsx_runtime.jsx)("br", {}), "5. \u5BFC\u51FA\u9009\u4E2D\u7684\u57CB\u70B9"] }) })) : (categories.map((cat) => ((0,jsx_runtime.jsxs)("div", { style: { marginBottom: 12 }, children: [(0,jsx_runtime.jsxs)("div", { className: "categoryHeader", children: [cat, " (", grouped[cat].length, ")"] }), grouped[cat].map((ev) => ((0,jsx_runtime.jsx)(EventCard, { event: ev }, ev.id)))] }, cat))))] }));
 }
+function LoadingOverlay({ status }) {
+    if (!status.isLoading)
+        return null;
+    return ((0,jsx_runtime.jsx)("div", { className: "loadingOverlay", children: (0,jsx_runtime.jsxs)("div", { className: "loadingCard", children: [(0,jsx_runtime.jsx)("div", { className: "spinner" }), (0,jsx_runtime.jsx)("div", { style: { marginTop: 12, fontWeight: 600, fontSize: 14 }, children: status.message || '处理中...' }), status.progress && ((0,jsx_runtime.jsxs)("div", { style: { marginTop: 8, fontSize: 12, color: 'var(--color-text-secondary)' }, children: [status.progress.current, " / ", status.progress.total] }))] }) }));
+}
 function App() {
     const [mode, setMode] = (0,react.useState)('prd');
     const [settings, setSettings] = (0,react.useState)({ openRouterApiKey: '', model: 'anthropic/claude-3.5-sonnet' });
@@ -5275,6 +5319,7 @@ function App() {
     const [error, setError] = (0,react.useState)(null);
     const [exportData, setExportData] = (0,react.useState)(null);
     const [showSettings, setShowSettings] = (0,react.useState)(false);
+    const [loadingStatus, setLoadingStatus] = (0,react.useState)({ isLoading: false });
     (0,react.useEffect)(() => {
         function onMessage(event) {
             const msg = event.data.pluginMessage;
@@ -5314,6 +5359,14 @@ function App() {
                 setError(null);
                 return;
             }
+            if (msg.type === 'LOADING_STATUS') {
+                setLoadingStatus(msg.status);
+                // Clear error when loading starts
+                if (msg.status.isLoading) {
+                    setError(null);
+                }
+                return;
+            }
         }
         window.addEventListener('message', onMessage);
         postMessage({ type: 'INIT' });
@@ -5332,7 +5385,7 @@ function App() {
                 } })) : ((0,jsx_runtime.jsx)(TrackerView, { context: context, events: events })), showSettings && ((0,jsx_runtime.jsx)(SettingsPanel, { settings: settings, onChange: setSettings, onSave: () => {
                     postMessage({ type: 'SET_SETTINGS', settings });
                     setShowSettings(false);
-                }, onClose: () => setShowSettings(false) })), exportData && ((0,jsx_runtime.jsx)("div", { className: "overlay", onClick: () => setExportData(null), children: (0,jsx_runtime.jsxs)("div", { className: "modal", style: { maxWidth: 520 }, onClick: (e) => e.stopPropagation(), children: [(0,jsx_runtime.jsxs)("div", { className: "row", style: { justifyContent: 'space-between', marginBottom: 8 }, children: [(0,jsx_runtime.jsxs)("div", { style: { fontWeight: 700 }, children: ["Export (", exportData.format.toUpperCase(), ")"] }), (0,jsx_runtime.jsx)("button", { className: "iconBtn", onClick: () => setExportData(null), children: "\u2715" })] }), (0,jsx_runtime.jsx)("div", { className: "small", style: { marginBottom: 8 }, children: "\u590D\u5236\u4E0B\u9762\u5185\u5BB9\uFF08Cmd/Ctrl + A\uFF0C\u7136\u540E Cmd/Ctrl + C\uFF09" }), (0,jsx_runtime.jsx)("textarea", { className: "input mono", style: { width: '100%', minHeight: 240, resize: 'vertical' }, readOnly: true, value: exportData.data, onFocus: (e) => e.currentTarget.select() })] }) })), (0,jsx_runtime.jsx)("div", { className: "notice", children: error ? ((0,jsx_runtime.jsx)("span", { style: { color: 'var(--color-error)' }, children: error })) : ((0,jsx_runtime.jsx)("span", { className: "small", children: "\u9009\u62E9\u4E00\u4E2A Frame \u4F7F\u7528 PRD Sync\uFF1B\u9009\u62E9\u6309\u94AE/\u8F93\u5165\u6846\u7B49\u7528 Tracker Pro\u3002" })) })] }));
+                }, onClose: () => setShowSettings(false) })), exportData && ((0,jsx_runtime.jsx)("div", { className: "overlay", onClick: () => setExportData(null), children: (0,jsx_runtime.jsxs)("div", { className: "modal", style: { maxWidth: 520 }, onClick: (e) => e.stopPropagation(), children: [(0,jsx_runtime.jsxs)("div", { className: "row", style: { justifyContent: 'space-between', marginBottom: 8 }, children: [(0,jsx_runtime.jsxs)("div", { style: { fontWeight: 700 }, children: ["Export (", exportData.format.toUpperCase(), ")"] }), (0,jsx_runtime.jsx)("button", { className: "iconBtn", onClick: () => setExportData(null), children: "\u2715" })] }), (0,jsx_runtime.jsx)("div", { className: "small", style: { marginBottom: 8 }, children: "\u590D\u5236\u4E0B\u9762\u5185\u5BB9\uFF08Cmd/Ctrl + A\uFF0C\u7136\u540E Cmd/Ctrl + C\uFF09" }), (0,jsx_runtime.jsx)("textarea", { className: "input mono", style: { width: '100%', minHeight: 240, resize: 'vertical' }, readOnly: true, value: exportData.data, onFocus: (e) => e.currentTarget.select() })] }) })), (0,jsx_runtime.jsx)("div", { className: "notice", children: error ? ((0,jsx_runtime.jsx)("span", { style: { color: 'var(--color-error)' }, children: error })) : ((0,jsx_runtime.jsx)("span", { className: "small", children: "\u9009\u62E9\u4E00\u4E2A Frame \u4F7F\u7528 PRD Sync\uFF1B\u9009\u62E9\u6309\u94AE/\u8F93\u5165\u6846\u7B49\u7528 Tracker Pro\u3002" })) }), (0,jsx_runtime.jsx)(LoadingOverlay, { status: loadingStatus })] }));
 }
 client.createRoot(document.getElementById('root')).render((0,jsx_runtime.jsx)(App, {}));
 

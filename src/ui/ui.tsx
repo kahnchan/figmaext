@@ -12,6 +12,7 @@ import type {
   Settings,
   TrackingEvent,
   UIToPluginMessage,
+  LoadingStatus,
 } from '@shared/messages';
 
 function postMessage(msg: UIToPluginMessage) {
@@ -391,6 +392,26 @@ function TrackerView({ context, events }: { context: ScanContext | null; events:
   );
 }
 
+function LoadingOverlay({ status }: { status: LoadingStatus }) {
+  if (!status.isLoading) return null;
+
+  return (
+    <div className="loadingOverlay">
+      <div className="loadingCard">
+        <div className="spinner"></div>
+        <div style={{ marginTop: 12, fontWeight: 600, fontSize: 14 }}>
+          {status.message || '处理中...'}
+        </div>
+        {status.progress && (
+          <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+            {status.progress.current} / {status.progress.total}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [mode, setMode] = useState<Mode>('prd');
   const [settings, setSettings] = useState<Settings>({ openRouterApiKey: '', model: 'anthropic/claude-3.5-sonnet' });
@@ -401,6 +422,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [exportData, setExportData] = useState<{ format: 'csv' | 'json'; data: string } | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState<LoadingStatus>({ isLoading: false });
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
@@ -443,6 +465,15 @@ function App() {
           setExportData({ format: msg.format, data: msg.data });
         }
         setError(null);
+        return;
+      }
+
+      if (msg.type === 'LOADING_STATUS') {
+        setLoadingStatus(msg.status);
+        // Clear error when loading starts
+        if (msg.status.isLoading) {
+          setError(null);
+        }
         return;
       }
     }
@@ -551,6 +582,8 @@ function App() {
           <span className="small">选择一个 Frame 使用 PRD Sync；选择按钮/输入框等用 Tracker Pro。</span>
         )}
       </div>
+
+      <LoadingOverlay status={loadingStatus} />
     </div>
   );
 }

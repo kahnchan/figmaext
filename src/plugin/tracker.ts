@@ -2,16 +2,16 @@ import type { Settings, TrackingEvent, TrackingProperty } from '@shared/messages
 import type { InteractiveNodeInfo } from './scan';
 import { openRouterChat, isVisionModel, type ChatMessage, type TextContent, type ImageContent } from './openrouter';
 
-const VISION_SYSTEM_PROMPT = `You are an expert at analyzing mobile app UI screenshots to generate tracking events for a **Web3 Wallet App**.
+const VISION_SYSTEM_PROMPT = `You are an expert Product Manager analyzing a **Web3 Wallet App** UI to generate precise tracking events.
 
 I will show you:
-1. A screenshot of the FULL PAGE/SCREEN for context
+1. A screenshot of the FULL PAGE/SCREEN for business context
 2. A screenshot of the SPECIFIC ELEMENT the user wants to track
 
 Your task:
-1. Understand the PAGE CONTEXT (what feature/module is this?)
-2. Identify WHAT ACTION the element triggers
-3. Generate a precise tracking event following the naming conventions below
+1. **Deeply understand the BUSINESS SCENARIO** - What is the user trying to accomplish?
+2. **Identify the USER'S INTENT** - Why would they interact with this element?
+3. Generate a tracking event that captures business value
 
 ---
 
@@ -20,27 +20,26 @@ Your task:
 Format: \`{module}_{action}_{element}\` in **snake_case**
 
 ### Structure:
-1. **module**: Business context / page (swap, order, market, wallet, send, trading, earn)
-2. **action**: What user does (tap, view, submit, toggle, select, input)
-3. **element**: UI element (confirm, cancel, tab, token, card, button)
+1. **module**: Business feature/function (identify from WHAT THE USER IS DOING)
+2. **action**: User behavior (tap, view, submit, toggle, select, input, scroll)
+3. **element**: UI element type (confirm, cancel, tab, token, card, button, input)
 
-### Module First - Identify from screenshot context:
-| Module | When to use | Example Events |
-|--------|-------------|----------------|
-| \`swap_\` | Swap/exchange page | \`swap_tap_confirm\`, \`swap_select_token\` |
-| \`trading_\` | Trading page with tabs | \`trading_tap_tab\`, \`trading_view_chart\` |
-| \`order_\` | Order list/detail | \`order_tap_cancel\`, \`order_view_detail\` |
-| \`market_\` | Market/prices page | \`market_tap_token\`, \`market_toggle_watchlist\` |
-| \`send_\` | Send crypto | \`send_input_address\`, \`send_submit_transfer\` |
-| \`receive_\` | Receive/deposit | \`receive_tap_copy\`, \`receive_tap_share\` |
-| \`wallet_\` | Portfolio/assets | \`wallet_tap_asset\`, \`wallet_view_balance\` |
-| \`earn_\` | Staking/DeFi | \`earn_tap_stake\`, \`earn_tap_claim\` |
-| \`settings_\` | App settings | \`settings_toggle_biometric\`, \`settings_tap_backup\` |
-| \`home_\` | Home/dashboard | \`home_tap_banner\`, \`home_view_card\` |
+### Module Examples - Understand from business context:
+| What user is doing | Module prefix | Example Events |
+|-------------------|---------------|----------------|
+| Swapping/exchanging tokens | \`swap_\` | \`swap_tap_confirm\`, \`swap_select_token\` |
+| Managing open orders | \`order_\` | \`order_tap_cancel\`, \`order_view_detail\` |
+| Browsing market prices | \`market_\` | \`market_tap_token\`, \`market_toggle_watchlist\` |
+| Sending cryptocurrency | \`send_\` | \`send_input_address\`, \`send_submit_transfer\` |
+| Viewing portfolio | \`wallet_\` | \`wallet_tap_asset\`, \`wallet_view_balance\` |
+| Staking/earning yield | \`earn_\` | \`earn_tap_stake\`, \`earn_tap_claim\` |
 
-### ⚠️ Module First, Always:
-❌ BAD: \`tap_confirm\`, \`tap_tab\` (no business context)
-✅ GOOD: \`swap_tap_confirm\`, \`trading_tap_tab\` (clear which feature)
+**Key principle**: Module reflects the **business function**, not just page name.
+
+### ⚠️ Avoid generic/meaningless modules:
+❌ BAD: \`navigation_\`, \`page_\`, \`screen_\`, \`app_\` (too generic)
+❌ BAD: \`tap_confirm\`, \`click_button\` (no business context)
+✅ GOOD: \`swap_tap_confirm\`, \`order_tap_cancel\` (clear business intent)
 
 ---
 
@@ -103,19 +102,69 @@ Format: \`{module}_{action}_{element}\` in **snake_case**
 
 ---
 
+## CATEGORY - Business function categorization
+
+**Don't use pre-defined lists. Understand the BUSINESS FUNCTION.**
+
+✅ GOOD categories (business-focused):
+- Transaction (交易) - for swap/send/receive actions
+- Portfolio (资产) - for wallet/balance views
+- Order Management (订单) - for order operations
+- Market Research (行情) - for price/chart viewing
+- DeFi (DeFi) - for staking/lending
+- Account (账户) - for settings/security
+
+❌ BAD categories (generic/meaningless):
+- Navigation (导航) - too generic
+- Page (页面) - not business-focused
+- Button (按钮) - describes UI, not function
+- General (通用) - meaningless
+
+**Key**: Category should answer "What business goal is this supporting?"
+
+---
+
+## TRIGGER CONDITION - Business scenario analysis
+
+**Don't just say "用户点击时" - explain the BUSINESS SCENARIO!**
+
+### Framework: When + Why + What happens
+1. **When**: In what business situation does this happen?
+2. **Why**: What is the user's goal/intent?
+3. **What**: What business outcome does this trigger?
+
+### Examples:
+
+❌ BAD (shallow): "用户点击确认按钮时"
+✅ GOOD (business): "用户确认Swap交易参数（代币、数量、滑点）后，点击确认按钮提交链上交易"
+
+❌ BAD: "用户点击取消"
+✅ GOOD: "用户在订单详情页查看未完成订单时，决定取消该订单并释放保证金"
+
+❌ BAD: "用户切换Tab"
+✅ GOOD: "用户在交易页面切换交易类型（Swap/Bridge/Limit）以使用不同的交易功能"
+
+❌ BAD: "用户选择代币"
+✅ GOOD: "用户在Swap页面选择要兑换的目标代币，用于确定兑换方向"
+
+### Template:
+"当用户[业务场景]时，[用户意图]，通过[操作]来[业务结果]"
+
+---
+
 ## OUTPUT FORMAT
 
 \`\`\`json
 {
   "eventName": "snake_case_event_name",
   "eventDisplayName": "中文事件描述",
-  "category": "category_name",
-  "triggerCondition": "具体触发时机描述",
+  "category": "业务功能分类（理解业务本质，不要用预设列表）",
+  "triggerCondition": "详细的业务触发场景（包含：何时发生、用户意图、业务结果）",
   "properties": [
     {
       "key": "snake_case_key",
       "displayName": "中文属性名",
-      "description": "属性用途说明",
+      "description": "属性的业务用途说明",
       "possibleValues": "可选值列表（如适用）"
     }
   ]
@@ -123,52 +172,66 @@ Format: \`{module}_{action}_{element}\` in **snake_case**
 \`\`\`
 
 REMEMBER: 
-- Look at the ACTUAL UI elements in screenshots
-- Be specific to the business context
-- Don't guess features not visible in the UI
-- **Focus on business value, skip low-value interactions**`;
+- Understand the BUSINESS CONTEXT deeply, not just UI elements
+- Category = business function, not page name
+- Trigger condition = business scenario with user intent
+- **Focus on WHY users do this, not just WHAT they click**`;
 
-const TEXT_SYSTEM_PROMPT = `You are a tracking event generator for a **Web3 Wallet App**.
+const TEXT_SYSTEM_PROMPT = `You are a Product Manager analyzing a **Web3 Wallet App** to generate precise tracking events.
 
-Analyze the UI element texts and page context to generate a precise tracking event.
+Deeply understand the business context from element texts and page context.
 
 ---
 
 ## EVENT NAMING: \`{module}_{action}_{element}\` in **snake_case**
 
-### Structure: module (business) + action + element
-- \`swap_\` → \`swap_tap_confirm\`, \`swap_select_token\`, \`swap_input_amount\`
-- \`trading_\` → \`trading_tap_tab\`, \`trading_view_chart\`
-- \`order_\` → \`order_tap_cancel\`, \`order_view_detail\`
-- \`market_\` → \`market_tap_token\`, \`market_toggle_watchlist\`
-- \`send_\` → \`send_input_address\`, \`send_submit_transfer\`
-- \`wallet_\` → \`wallet_tap_asset\`, \`wallet_view_balance\`
-- \`settings_\` → \`settings_toggle_biometric\`, \`settings_tap_backup\`
+### Structure: module (business function) + action + element
 
-### Modules:
-onboarding | wallet | market | swap | send | receive | order | earn | dapp | nft | settings | trading | home | main
+Module = **business function**, not page name. Ask: "What is the user trying to accomplish?"
+
+Examples:
+- User swapping tokens → \`swap_tap_confirm\`, \`swap_select_token\`
+- User managing orders → \`order_tap_cancel\`, \`order_view_detail\`
+- User browsing market → \`market_tap_token\`, \`market_toggle_watchlist\`
+- User sending crypto → \`send_input_address\`, \`send_submit_transfer\`
+- User viewing portfolio → \`wallet_tap_asset\`, \`wallet_view_balance\`
 
 ---
 
-## ⚠️ MODULE FIRST + MERGE
+## ⚠️ MERGE SIMILAR ELEMENTS
 
-Module prefix required, merge same-type elements:
+Same-type elements → ONE event + property:
 - ❌ \`tap_tab\` → ✅ \`trading_tap_tab\` + \`tab_name\`
 - ❌ \`tap_token_btc\` → ✅ \`market_tap_token\` + \`token_symbol\`
 
 ---
 
-## CONTEXT RECOGNITION:
+## CATEGORY - Business function
 
-| Page Keywords | Category | Typical Events |
-|---------------|----------|----------------|
-| Open orders, Limit, Cancel order | order | order_tap_cancel, order_view_detail |
-| Swap, Exchange, Slippage | swap | swap_tap_confirm, swap_select_token |
-| Send, Recipient, Amount | send | send_submit_transfer, send_input_address |
-| Receive, Deposit, QR | receive | receive_tap_copy, receive_tap_share |
-| Market, Price, Watchlist | market | market_tap_token, market_toggle_watchlist |
-| Wallet, Balance, Assets | wallet | wallet_view_asset, wallet_tap_asset |
-| Stake, APY, Rewards | earn | earn_tap_stake, earn_tap_claim |
+**Understand business essence, don't use generic labels.**
+
+✅ GOOD: Transaction, Portfolio, Order Management, Market Research, DeFi, Account
+❌ BAD: Navigation, Page, Button, General (too generic)
+
+Category should answer: "What business goal does this support?"
+
+---
+
+## TRIGGER CONDITION - Business scenario
+
+**Explain the business scenario, not just "用户点击"!**
+
+Framework: When + Why + What
+- When: In what business situation?
+- Why: User's goal/intent?
+- What: Business outcome?
+
+Examples:
+- ❌ BAD: "用户点击确认"
+- ✅ GOOD: "用户确认Swap交易参数后，点击确认提交链上交易"
+
+- ❌ BAD: "用户选择Tab"
+- ✅ GOOD: "用户在交易页面切换交易类型（Swap/Bridge/Limit）以使用不同功能"
 
 ---
 
@@ -178,13 +241,13 @@ Module prefix required, merge same-type elements:
 {
   "eventName": "snake_case_event",
   "eventDisplayName": "中文描述",
-  "category": "category",
-  "triggerCondition": "触发时机",
-  "properties": [{"key": "snake_case", "displayName": "中文", "description": "说明", "possibleValues": "可选值"}]
+  "category": "业务功能分类（深入理解业务本质）",
+  "triggerCondition": "详细业务场景（包含何时、为何、结果）",
+  "properties": [{"key": "snake_case", "displayName": "中文", "description": "业务用途", "possibleValues": "可选值"}]
 }
 \`\`\`
 
-**CRITICAL:** Only use context visible in the provided texts. Do NOT guess features.`;
+**Focus on business understanding over UI description.**`;
 
 export async function generateTrackingForNode(
   settings: Settings,
@@ -272,8 +335,19 @@ Generate a tracking event based on what you SEE in the screenshots.`,
 
     const eventName = String(parsed.eventName || 'unknown_event');
     const eventDisplayName = String(parsed.eventDisplayName || parsed.eventName || '未知事件');
-    const category = String(parsed.category || inferCategoryFromContext(input.pageContextTexts));
-    const triggerCondition = String(parsed.triggerCondition || '用户触发时');
+    
+    // Let AI decide category, only use inference as last resort
+    let category = String(parsed.category || '');
+    if (!category || category === 'General' || category === 'Navigation') {
+      category = inferCategoryFromContext(input.pageContextTexts);
+    }
+    
+    // Trigger condition should have business context
+    let triggerCondition = String(parsed.triggerCondition || '');
+    if (!triggerCondition || triggerCondition.length < 10) {
+      // Generate a better default with element context
+      triggerCondition = `用户在${input.parentFrameName}页面与"${input.text || input.nodeName}"交互时触发`;
+    }
 
     const propsRaw = Array.isArray(parsed.properties) ? parsed.properties : [];
     const properties: TrackingProperty[] = propsRaw
@@ -306,13 +380,12 @@ Generate a tracking event based on what you SEE in the screenshots.`,
     return {
       elementType: input.elementType,
       eventName,
-      eventDisplayName: `${input.text || input.nodeName}`,
+      eventDisplayName: `${input.text || input.nodeName}点击`,
       category,
-      triggerCondition: '用户点击时触发',
+      triggerCondition: `用户在${input.parentFrameName}页面点击"${input.text || input.nodeName}"时触发`,
       properties: [
-        { key: 'source_page', displayName: '来源页面', description: '当前页面名称' },
-        { key: 'element_name', displayName: '元素名称', description: '交互元素的名称' },
-        { key: 'action_type', displayName: '交互类型', description: '用户操作类型 (tap, slide 等)' },
+        { key: 'source_page', displayName: '来源页面', description: '用户从哪个页面触发该操作' },
+        { key: 'element_name', displayName: '元素名称', description: '被点击元素的名称' },
       ],
       verified: false,
     };
@@ -359,30 +432,37 @@ function extractJsonObject(raw: string): string {
 function inferCategoryFromContext(texts: string[]): string {
   const joined = texts.join(' ').toLowerCase();
   
-  // Order-related
-  if (joined.includes('order') || joined.includes('limit price') || joined.includes('open orders')) return 'order';
-  // Swap/Trade
-  if (joined.includes('swap') || joined.includes('exchange') || joined.includes('slippage')) return 'swap';
-  // Send
-  if (joined.includes('send') && (joined.includes('address') || joined.includes('amount') || joined.includes('recipient'))) return 'send';
-  // Receive
-  if (joined.includes('receive') || joined.includes('deposit') || joined.includes('qr code')) return 'receive';
-  // Market
-  if (joined.includes('market') || joined.includes('price') || joined.includes('chart') || joined.includes('watchlist')) return 'market';
-  // NFT
-  if (joined.includes('nft') || joined.includes('collectible')) return 'nft';
-  // DApp
-  if (joined.includes('dapp') || joined.includes('connect') || joined.includes('walletconnect')) return 'dapp';
-  // Earn/Staking
-  if (joined.includes('stake') || joined.includes('apy') || joined.includes('earn') || joined.includes('rewards')) return 'earn';
-  // Settings
-  if (joined.includes('setting') || joined.includes('security') || joined.includes('backup')) return 'settings';
-  // Onboarding
-  if (joined.includes('onboarding') || joined.includes('welcome') || joined.includes('create wallet') || joined.includes('import wallet')) return 'onboarding';
-  // Notification
-  if (joined.includes('notification') || joined.includes('alert') || joined.includes('price alert')) return 'notification';
+  // Only infer for very clear business contexts
+  // Order management
+  if (joined.includes('order') && (joined.includes('cancel') || joined.includes('limit') || joined.includes('open'))) 
+    return 'Order Management';
   
-  return 'wallet';
+  // Transaction-related (swap/send)
+  if (joined.includes('swap') || joined.includes('exchange') || joined.includes('slippage')) 
+    return 'Transaction';
+  if (joined.includes('send') && (joined.includes('address') || joined.includes('recipient'))) 
+    return 'Transaction';
+  if (joined.includes('receive') || joined.includes('deposit')) 
+    return 'Transaction';
+  
+  // Market/Research
+  if (joined.includes('market') || joined.includes('price') || joined.includes('chart') || joined.includes('watchlist')) 
+    return 'Market Research';
+  
+  // DeFi
+  if (joined.includes('stake') || joined.includes('apy') || joined.includes('earn') || joined.includes('yield')) 
+    return 'DeFi';
+  
+  // Account/Settings
+  if (joined.includes('setting') || joined.includes('security') || joined.includes('backup') || joined.includes('biometric')) 
+    return 'Account';
+  
+  // Portfolio/Assets
+  if (joined.includes('balance') || joined.includes('asset') || joined.includes('portfolio') || joined.includes('wallet')) 
+    return 'Portfolio';
+  
+  // Default: let AI decide, don't force a generic category
+  return 'General';
 }
 
 function inferEventNameFromContext(nodeName: string, text: string | undefined, pageTexts: string[]): string {
@@ -546,6 +626,27 @@ Format: \`{module}_{action}_{element}\` in **snake_case**
 
 ---
 
+## CATEGORY & TRIGGER CONDITION (CRITICAL)
+
+### Category - Business function, not page name
+**Understand business essence:**
+✅ GOOD: Transaction, Portfolio, Order Management, Market Research, DeFi, Account
+❌ BAD: Navigation, Page, Button, General, Screen
+
+Ask: "What business goal does this support?"
+
+### Trigger Condition - Business scenario with intent
+**Framework: When + Why + What**
+
+Examples:
+- ❌ BAD: "用户点击取消"
+- ✅ GOOD: "用户在订单详情页决定取消未完成订单以释放保证金"
+
+- ❌ BAD: "用户切换Tab"
+- ✅ GOOD: "用户在交易页面切换交易类型（Swap/Bridge/Limit）以使用不同功能"
+
+---
+
 ## OUTPUT FORMAT
 
 \`\`\`json
@@ -554,14 +655,16 @@ Format: \`{module}_{action}_{element}\` in **snake_case**
     "elementDescription": "元素位置和外观描述 (e.g., '右上角红色Cancel按钮')",
     "eventName": "snake_case_event_name",
     "eventDisplayName": "中文事件描述",
-    "category": "category_name",
-    "triggerCondition": "触发时机描述",
+    "category": "业务功能分类（理解业务本质，避免Navigation等通用词）",
+    "triggerCondition": "业务场景描述（包含何时发生、用户意图、业务结果）",
     "properties": [
-      {"key": "snake_case", "displayName": "中文", "description": "说明", "possibleValues": "可选值"}
+      {"key": "snake_case", "displayName": "中文", "description": "业务用途说明", "possibleValues": "可选值"}
     ]
   }
 ]
 \`\`\`
+
+**Remember: Deep business understanding > Surface UI description**
 `;
 
 export interface ElementHint {
@@ -680,14 +783,26 @@ Output JSON array. Be comprehensive - identify ALL clickable/interactive element
           possibleValues: p.possibleValues ? String(p.possibleValues) : undefined,
         }));
       
+      // Let AI decide category, avoid generic defaults
+      let category = String(item.category || 'General');
+      if (category === 'Navigation' || category === 'Page' || category === 'Button') {
+        category = 'General'; // Flag for review
+      }
+      
+      // Ensure trigger condition has business context
+      let triggerCondition = String(item.triggerCondition || '');
+      if (!triggerCondition || triggerCondition.length < 10) {
+        triggerCondition = `用户在${input.frameName}页面与该元素交互时触发`;
+      }
+      
       results.push({
         elementDescription: String(item.elementDescription || item.element || '未知元素'),
         eventName: String(item.eventName),
         eventDisplayName: String(item.eventDisplayName || item.eventName),
-        category: String(item.category || 'Wallet'),
-        triggerCondition: String(item.triggerCondition || '用户点击时'),
+        category,
+        triggerCondition,
         properties: properties.length > 0 ? properties : [
-          { key: 'source_page', displayName: '来源页面', description: '当前页面' }
+          { key: 'source_page', displayName: '来源页面', description: '用户从哪个页面触发该操作' }
         ],
       });
     }
