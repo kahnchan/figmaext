@@ -13,6 +13,8 @@ import type {
   TrackingEvent,
   UIToPluginMessage,
   LoadingStatus,
+  I18nKey,
+  I18nResult,
 } from '@shared/messages';
 
 function postMessage(msg: UIToPluginMessage) {
@@ -167,6 +169,22 @@ function SettingsPanel({
           </button>
           <div className="small" style={{ marginTop: 6 }}>
             点击测试认证信息是否正确
+          </div>
+        </div>
+
+        <div className="hr" />
+        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 12 }}>Lokalise 配置</div>
+        
+        <div style={{ marginBottom: 12 }}>
+          <div className="label">Default Lokalise Project</div>
+          <input
+            className="input"
+            value={settings.lokaliseProject || ''}
+            onChange={(e) => onChange({ ...settings, lokaliseProject: e.target.value || undefined })}
+            placeholder="v5"
+          />
+          <div className="small" style={{ marginTop: 6 }}>
+            默认项目名称（生成时可修改）
           </div>
         </div>
 
@@ -480,6 +498,399 @@ function EventCard({ event }: { event: TrackingEvent }) {
   );
 }
 
+function I18nView({
+  context,
+  settings,
+  i18nResult,
+  i18nKeys,
+}: {
+  context: ScanContext | null;
+  settings: Settings;
+  i18nResult: I18nResult | null;
+  i18nKeys: I18nKey[];
+}) {
+  const [projectName, setProjectName] = useState(settings.lokaliseProject || 'v5');
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [additionalPrompt, setAdditionalPrompt] = useState('');
+  const [deletedTexts, setDeletedTexts] = useState<string[]>([]);
+
+  useEffect(() => {
+    setProjectName(settings.lokaliseProject || 'v5');
+  }, [settings.lokaliseProject]);
+
+  const selectedCount = i18nKeys.filter(k => k.selected).length;
+  
+  // Use context for real-time frame selection display, i18nResult for generated keys
+  const contextFrameCount = context?.frames ? context.frames.length : (context ? 1 : 0);
+  const resultFrameCount = i18nResult?.frames.length || 0;
+  const frameCount = i18nResult ? resultFrameCount : contextFrameCount;
+  const isMultiFrame = frameCount > 1;
+  
+  // Get frame names from context (real-time) or i18nResult (after generation)
+  const getFrameNames = () => {
+    if (i18nResult && i18nResult.frames.length > 0) {
+      return i18nResult.frames;
+    }
+    if (context?.frames && context.frames.length > 0) {
+      return context.frames.map(f => f.frameName);
+    }
+    if (context?.frameName) {
+      return [context.frameName];
+    }
+    return [];
+  };
+  const frameNames = getFrameNames();
+  
+  // Get text count from context
+  const getTextCount = () => {
+    if (i18nResult) {
+      return i18nResult.totalKeys;
+    }
+    if (context?.frames && context.frames.length > 0) {
+      return context.frames.reduce((acc, f) => acc + f.texts.length, 0);
+    }
+    if (context?.texts) {
+      return context.texts.length;
+    }
+    return 0;
+  };
+  const textCount = getTextCount();
+
+  return (
+    <div className="content">
+      {/* Selected Frames Info - Real-time update from context */}
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div className="label" style={{ marginBottom: 8 }}>
+          {isMultiFrame ? `Selected Frames (${frameCount})` : 'Selected Frame'}
+        </div>
+        
+        {frameNames.length > 0 ? (
+          <div>
+            {isMultiFrame ? (
+              <>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                  {frameNames[0]} → ... → {frameNames[frameNames.length - 1]}
+                </div>
+                <div className="small">
+                  多个设计稿（{frameCount} 个屏幕）· Text nodes: <span className="mono">{textCount}</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 12, fontWeight: 600 }}>
+                  {frameNames[0]}
+                </div>
+                <div className="small" style={{ marginTop: 6 }}>
+                  Text nodes: <span className="mono">{textCount}</span>
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--subtext)' }}>
+              请在 Figma 中选择一个或多个 Frame
+            </div>
+            <div className="small" style={{ marginTop: 6 }}>
+              选择后点击下方"生成 i18n Keys"按钮
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* i18n Keys Generation & Output */}
+      <div className="card">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <div className="label" style={{ marginBottom: 0 }}>i18n Keys</div>
+          {i18nResult && (
+            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: 12 }}>
+              <input
+                type="checkbox"
+                checked={selectedCount === i18nKeys.length && i18nKeys.length > 0}
+                onChange={() => {
+                  const allSelected = selectedCount === i18nKeys.length;
+                  postMessage({ type: 'SELECT_ALL_I18N_KEYS', selected: !allSelected });
+                }}
+                style={{ marginRight: 4 }}
+              />
+              全选 ({selectedCount}/{i18nKeys.length})
+            </label>
+          )}
+        </div>
+        <div className="hr" />
+        
+        {i18nResult ? (
+          <>
+            {/* Keys List */}
+            <div style={{ 
+              maxHeight: '320px', 
+              overflowY: 'auto',
+              paddingRight: '4px',
+              marginBottom: 12
+            }}>
+              
+              {i18nKeys.map(key => (
+                <I18nKeyCard
+                  key={key.id}
+                  i18nKey={key}
+                  projectName={projectName}
+                  isEditing={editingKey === key.id}
+                  onEdit={() => setEditingKey(editingKey === key.id ? null : key.id)}
+                  onSave={(updated) => {
+                    postMessage({ type: 'UPDATE_I18N_KEY', key: updated });
+                    setEditingKey(null);
+                  }}
+                  onToggle={() => postMessage({ type: 'TOGGLE_I18N_KEY', id: key.id })}
+                  onDelete={() => {
+                    // 记录被删除的原始文本，重新生成时会排除
+                    setDeletedTexts(prev => [...prev, key.originalText]);
+                    postMessage({ type: 'DELETE_I18N_KEY', id: key.id });
+                  }}
+                  onCopyAdd={(keyId) => postMessage({ type: 'COPY_SINGLE_ADD_COMMAND', keyId, projectName })}
+                />
+              ))}
+            </div>
+            
+            <div className="hr" />
+            
+            {/* Actions */}
+            <div style={{ marginTop: 12 }}>
+              <div className="small" style={{ marginBottom: 6 }}>Lokalise Project：</div>
+              <input
+                className="input"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                placeholder="v5"
+                style={{ 
+                  width: '100%', 
+                  marginBottom: 12,
+                  fontFamily: 'inherit',
+                  fontSize: '12px'
+                }}
+              />
+              
+              <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                <button 
+                  className="btn btnPrimary" 
+                  onClick={() => {
+                    const selectedKeys = i18nKeys.filter(k => k.selected);
+                    if (selectedKeys.length === 0) {
+                      alert('请先选择要导出的 keys');
+                      return;
+                    }
+                    const bulkaddData = selectedKeys.map(k => `${k.key} | ${k.value}`).join('\n');
+                    const textarea = document.createElement('textarea');
+                    textarea.value = bulkaddData;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                      document.execCommand('copy');
+                      alert(`✓ 已复制 bulkadd 数据到剪贴板\n\n共 ${selectedKeys.length} 个 keys\n\n使用方法：\n1. 在 Slack 输入 @Loka-AI bulkadd\n2. 选择项目 ${projectName}\n3. 粘贴数据`);
+                    } catch (err) {
+                      alert('复制失败，请手动选择文本复制');
+                    }
+                    document.body.removeChild(textarea);
+                  }}
+                  disabled={selectedCount === 0}
+                  style={{ flex: 1 }}
+                >
+                  📦 复制 bulkadd 数据
+                </button>
+                <button 
+                  className="btn" 
+                  onClick={() => postMessage({ type: 'CREATE_I18N_TABLE' })}
+                  style={{ flex: 1 }}
+                  title="在画布上创建可编辑表格"
+                >
+                  📊 创建表格
+                </button>
+              </div>
+              
+              <div className="hr" style={{ margin: '12px 0' }} />
+              
+              <div className="small" style={{ marginBottom: 6 }}>补充提示（可选）：</div>
+              <textarea 
+                className="input" 
+                placeholder="例如：这是 Swap 模块、侧重导航相关的文案、忽略某些特定文本..."
+                value={additionalPrompt}
+                onChange={(e) => setAdditionalPrompt(e.target.value)}
+                rows={2}
+                style={{ 
+                  width: '100%', 
+                  marginBottom: 8,
+                  resize: 'vertical',
+                  fontFamily: 'inherit',
+                  fontSize: '12px'
+                }}
+              />
+              
+              <button 
+                className="btn" 
+                style={{ width: '100%' }}
+                onClick={() => postMessage({ 
+                  type: 'GENERATE_I18N_KEYS', 
+                  projectName,
+                  additionalPrompt: additionalPrompt || undefined,
+                  excludeTexts: deletedTexts.length > 0 ? deletedTexts : undefined
+                })}
+              >
+                🔄 重新生成 {deletedTexts.length > 0 && `(已排除 ${deletedTexts.length} 项)`}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="small" style={{ marginBottom: 6 }}>Lokalise Project：</div>
+            <input
+              className="input"
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              placeholder="v5"
+              style={{ 
+                width: '100%', 
+                marginBottom: 12,
+                fontFamily: 'inherit',
+                fontSize: '12px'
+              }}
+            />
+            
+            <button 
+              className="btn btnPrimary" 
+              style={{ width: '100%' }}
+              onClick={() => postMessage({ type: 'GENERATE_I18N_KEYS', projectName })}
+            >
+              🔤 生成 i18n Keys
+            </button>
+            
+            <div className="small" style={{ marginTop: 8, textAlign: 'center', color: 'var(--subtext)' }}>
+              将扫描选中 Frame 中的所有文本，生成英文 keys
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function I18nKeyCard({
+  i18nKey,
+  projectName,
+  isEditing,
+  onEdit,
+  onSave,
+  onToggle,
+  onDelete,
+  onCopyAdd,
+}: {
+  i18nKey: I18nKey;
+  projectName: string;
+  isEditing: boolean;
+  onEdit: () => void;
+  onSave: (key: I18nKey) => void;
+  onToggle: () => void;
+  onDelete: () => void;
+  onCopyAdd: (keyId: string) => void;
+}) {
+  const [editedKey, setEditedKey] = useState(i18nKey);
+
+  useEffect(() => {
+    setEditedKey(i18nKey);
+  }, [i18nKey]);
+
+  if (isEditing) {
+    return (
+      <div style={{ 
+        padding: 10, 
+        border: '1px solid var(--border)', 
+        marginBottom: 6, 
+        borderRadius: 6,
+        background: 'var(--surface)'
+      }}>
+        <div style={{ marginBottom: 8 }}>
+          <label className="small" style={{ fontWeight: 600 }}>Key:</label>
+          <input 
+            className="input"
+            value={editedKey.key} 
+            onChange={e => setEditedKey({ ...editedKey, key: e.target.value })} 
+            style={{ marginTop: 4, width: '100%' }}
+          />
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          <label className="small" style={{ fontWeight: 600 }}>Value (English):</label>
+          <input 
+            className="input"
+            value={editedKey.value} 
+            onChange={e => setEditedKey({ ...editedKey, value: e.target.value })} 
+            style={{ marginTop: 4, width: '100%' }}
+          />
+        </div>
+        <div className="row" style={{ gap: 8 }}>
+          <button className="btn btnPrimary" onClick={() => onSave(editedKey)} style={{ flex: 1 }}>
+            保存
+          </button>
+          <button className="btn" onClick={onEdit} style={{ flex: 1 }}>
+            取消
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      style={{ 
+        padding: 8, 
+        border: `1px solid ${i18nKey.selected ? 'var(--primary)' : 'var(--border)'}`, 
+        marginBottom: 6, 
+        borderRadius: 6,
+        background: i18nKey.selected ? 'rgba(91, 140, 255, 0.05)' : 'var(--surface)',
+        transition: 'all 0.15s ease',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+        <input 
+          type="checkbox" 
+          checked={i18nKey.selected} 
+          onChange={onToggle}
+          style={{ marginTop: 2, cursor: 'pointer' }}
+        />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="mono" style={{ 
+            fontWeight: 600, 
+            fontSize: 11, 
+            color: 'var(--text)', 
+            wordBreak: 'break-word',
+            marginBottom: 4
+          }}>
+            {i18nKey.key}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text)' }}>
+            {i18nKey.value}
+          </div>
+          {i18nKey.originalText !== i18nKey.value && (
+            <div className="small" style={{ color: 'var(--subtext)', marginTop: 4 }}>
+              原文: {i18nKey.originalText}
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+          <button 
+            className="iconBtn" 
+            onClick={() => onCopyAdd(i18nKey.id)}
+            title="复制 add 命令"
+          >
+            📋
+          </button>
+          <button className="iconBtn" onClick={onEdit} title="编辑">✏️</button>
+          <button className="iconBtn" onClick={onDelete} title="删除">🗑️</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TrackerView({ context, events }: { context: ScanContext | null; events: TrackingEvent[] }) {
   // Group events by category
   const grouped = useMemo(() => {
@@ -632,8 +1043,10 @@ function App() {
   const [context, setContext] = useState<ScanContext | null>(null);
   const [prdResult, setPrdResult] = useState<PRDResult | null>(null);
   const [events, setEvents] = useState<TrackingEvent[]>([]);
+  const [i18nKeys, setI18nKeys] = useState<I18nKey[]>([]);
+  const [i18nResult, setI18nResult] = useState<I18nResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [exportData, setExportData] = useState<{ format: 'csv' | 'json'; data: string } | null>(null);
+  const [exportData, setExportData] = useState<{ format: 'csv' | 'json' | 'bulkadd' | 'multicheck'; data: string } | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState<LoadingStatus>({ isLoading: false });
 
@@ -670,14 +1083,25 @@ function App() {
       }
 
       if (msg.type === 'EXPORT_DATA') {
-        // For CSV, trigger automatic download
+        // For CSV, trigger automatic download (tracking feature)
         if (msg.format === 'csv') {
           downloadFile(msg.data, 'tracking_events.csv', 'text/csv;charset=utf-8;');
-        } else {
+        } else if (msg.format === 'json') {
           // For JSON, show in modal for copy
           setExportData({ format: msg.format, data: msg.data });
         }
+        // bulkadd and multicheck are now handled directly in UI with clipboard
         setError(null);
+        return;
+      }
+
+      if (msg.type === 'I18N_KEYS') {
+        setI18nKeys(msg.keys);
+        return;
+      }
+
+      if (msg.type === 'I18N_RESULT') {
+        setI18nResult(msg.result);
         return;
       }
 
@@ -691,18 +1115,30 @@ function App() {
       }
 
       if (msg.type === 'COPY_TO_CLIPBOARD_ACK') {
-        // 复制到剪贴板
-        navigator.clipboard.writeText(msg.text).catch(() => {
-          // Fallback method
+        // 复制到剪贴板 - 使用 fallback 方法（Figma 插件环境 navigator.clipboard 可能不可用）
+        const copyToClipboard = (text: string) => {
           const textarea = document.createElement('textarea');
-          textarea.value = msg.text;
+          textarea.value = text;
           textarea.style.position = 'fixed';
           textarea.style.opacity = '0';
+          textarea.style.left = '-9999px';
           document.body.appendChild(textarea);
           textarea.select();
-          document.execCommand('copy');
+          try {
+            document.execCommand('copy');
+          } catch (e) {
+            console.error('Copy failed:', e);
+          }
           document.body.removeChild(textarea);
-        });
+        };
+        
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(msg.text).catch(() => {
+            copyToClipboard(msg.text);
+          });
+        } else {
+          copyToClipboard(msg.text);
+        }
         return;
       }
 
@@ -744,6 +1180,15 @@ function App() {
             >
               Tracker
             </button>
+            <button
+              className={`tabBtn ${mode === 'i18n' ? 'tabBtnActive' : ''}`}
+              onClick={() => {
+                setMode('i18n');
+                postMessage({ type: 'SET_MODE', mode: 'i18n' });
+              }}
+            >
+              i18n
+            </button>
           </div>
           <button
             className={`iconBtn ${!hasApiKey ? 'iconBtnWarn' : ''}`}
@@ -771,8 +1216,15 @@ function App() {
             postMessage({ type: 'SET_AUTOSYNC', enabled: v });
           }}
         />
-      ) : (
+      ) : mode === 'tracker' ? (
         <TrackerView context={context} events={events} />
+      ) : (
+        <I18nView
+          context={context}
+          settings={settings}
+          i18nResult={i18nResult}
+          i18nKeys={i18nKeys}
+        />
       )}
 
       {showSettings && (

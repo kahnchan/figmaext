@@ -1,10 +1,11 @@
 /// <reference types="@figma/plugin-typings" />
 
-import type { Mode, PluginToUIMessage, Settings, TrackingEvent, UIToPluginMessage, ScanContext } from '@shared/messages';
+import type { Mode, PluginToUIMessage, Settings, TrackingEvent, UIToPluginMessage, ScanContext, I18nKey } from '@shared/messages';
 import { scanSelectedFrame, scanSelectedInteractiveNodes, exportNodeAsBase64, getRootFrame, scanFrameForInteractiveElements } from './scan';
 import { syncPRD } from './prd';
 import { attachTrackingToLayer, generateTrackingForNode, readTrackingFromLayer, analyzePageWithVision, type ElementHint } from './tracker';
 import { fetchConfluencePage, compareAndMergePRD, syncToConfluence, testConfluenceConnection } from './confluence';
+import { scanTextNodesMultiFrame, generateI18nKeys, exportSingleAddCommand, exportBulkaddData, exportMultiCheckCommand, exportAsJSON, exportAsCSV, createI18nTable } from './i18n';
 
 const STORAGE_SETTINGS = 'onekey_settings';
 const STORAGE_AUTOSYNC = 'onekey_autosync';
@@ -21,6 +22,7 @@ let autoSync = true;
 let mode: Mode = 'prd';
 let lastContextKey = '';
 let trackingEvents: TrackingEvent[] = [];
+let i18nKeys: I18nKey[] = [];
 
 figma.showUI(__html__, { width: 420, height: 720, themeColors: true });
 
@@ -643,6 +645,52 @@ figma.ui.onmessage = async (msg: UIToPluginMessage) => {
       figma.notify(`✓ 已创建埋点表格 (${eventsToExport.length} 个事件)`);
       return;
     }
+
+    // ============ i18n Message Handlers ============
+    
+    if (msg.type === 'GENERATE_I18N_KEYS') {
+      await doGenerateI18nKeys(msg.projectName, msg.additionalPrompt, msg.excludeTexts);
+      return;
+    }
+
+    if (msg.type === 'UPDATE_I18N_KEY') {
+      i18nKeys = i18nKeys.map(k => k.id === msg.key.id ? { ...msg.key, edited: true } : k);
+      post({ type: 'I18N_KEYS', keys: i18nKeys });
+      return;
+    }
+
+    if (msg.type === 'TOGGLE_I18N_KEY') {
+      i18nKeys = i18nKeys.map(k => k.id === msg.id ? { ...k, selected: !k.selected } : k);
+      post({ type: 'I18N_KEYS', keys: i18nKeys });
+      return;
+    }
+
+    if (msg.type === 'SELECT_ALL_I18N_KEYS') {
+      i18nKeys = i18nKeys.map(k => ({ ...k, selected: msg.selected }));
+      post({ type: 'I18N_KEYS', keys: i18nKeys });
+      return;
+    }
+
+    if (msg.type === 'DELETE_I18N_KEY') {
+      i18nKeys = i18nKeys.filter(k => k.id !== msg.id);
+      post({ type: 'I18N_KEYS', keys: i18nKeys });
+      return;
+    }
+
+    if (msg.type === 'EXPORT_I18N') {
+      await doExportI18n(msg.format, msg.projectName);
+      return;
+    }
+
+    if (msg.type === 'COPY_SINGLE_ADD_COMMAND') {
+      await doCopySingleAddCommand(msg.keyId, msg.projectName);
+      return;
+    }
+
+    if (msg.type === 'CREATE_I18N_TABLE') {
+      await doCreateI18nTable();
+      return;
+    }
   } catch (e) {
     post({ type: 'ERROR', message: String((e as Error).message || e) });
   }
@@ -651,6 +699,164 @@ figma.ui.onmessage = async (msg: UIToPluginMessage) => {
 figma.on('selectionchange', () => {
   pushScanContext().catch((e) => post({ type: 'ERROR', message: String((e as Error).message || e) }));
 });
+
+// ============ i18n Helper Functions ============
+
+async function doGenerateI18nKeys(projectName?: string, additionalPrompt?: string, excludeTexts?: string[]) {
+  const selection = figma.currentPage.selection;
+  
+  // Filter out all FRAME type nodes
+  const frames = selection.filter(node => node.type === 'FRAME');
+  
+  if (frames.length === 0) {
+    figma.notify('请选择至少一个 Frame');
+    return;
+  }
+
+  try {
+    post({ type: 'LOADING_STATUS', status: { isLoading: true, message: `正在扫描 ${frames.length} 个 Frame 中的文本...` } });
+    
+    const frameIds = frames.map(f => f.id);
+    const frameNames = frames.map(f => f.name);
+    let { texts, filteredCount } = await scanTextNodesMultiFrame(frameIds);
+    
+    // 过滤掉用户已删除的文本
+    if (excludeTexts && excludeTexts.length > 0) {
+      const excludeSet = new Set(excludeTexts);
+      const beforeCount = texts.length;
+      texts = texts.filter(t => !excludeSet.has(t.textContent));
+      const excludedCount = beforeCount - texts.length;
+      if (excludedCount > 0) {
+        console.log(`[i18n] Excluded ${excludedCount} user-deleted texts`);
+        filteredCount += excludedCount;
+      }
+    }
+    
+    // 去重文本内容（相同文本只保留一个，减少 AI 处理量）
+    const seenTexts = new Set<string>();
+    const beforeDedup = texts.length;
+    texts = texts.filter(t => {
+      if (seenTexts.has(t.textContent)) {
+        return false;
+      }
+      seenTexts.add(t.textContent);
+      return true;
+    });
+    const dedupCount = beforeDedup - texts.length;
+    if (dedupCount > 0) {
+      console.log(`[i18n] Deduplicated ${dedupCount} duplicate texts`);
+    }
+    
+    if (texts.length === 0) {
+      figma.notify(`未找到需要翻译的文本（已过滤 ${filteredCount} 个非文本项）`);
+      post({ type: 'LOADING_STATUS', status: { isLoading: false } });
+      return;
+    }
+    
+    console.log(`[i18n] Found ${texts.length} translatable texts, filtered ${filteredCount} items`);
+    
+    post({ type: 'LOADING_STATUS', status: { isLoading: true, message: `正在导出 ${frames.length} 张截图...` } });
+    const screenshots: string[] = [];
+    for (const frameId of frameIds) {
+      const screenshot = await exportNodeAsBase64(frameId, 1200);
+      if (screenshot) screenshots.push(screenshot);
+    }
+    
+    post({ type: 'LOADING_STATUS', status: { isLoading: true, message: '正在使用 AI 生成英文 keys...' } });
+    const result = await generateI18nKeys(settings, frameNames, texts, screenshots, additionalPrompt);
+    
+    // 去重：根据 key 名称去重，保留第一个
+    const seenKeys = new Set<string>();
+    const uniqueKeys = result.keys.filter(k => {
+      if (seenKeys.has(k.key)) {
+        return false;
+      }
+      seenKeys.add(k.key);
+      return true;
+    });
+    
+    const duplicateCount = result.keys.length - uniqueKeys.length;
+    result.keys = uniqueKeys;
+    result.totalKeys = uniqueKeys.length;
+    
+    i18nKeys = result.keys;
+    
+    post({ type: 'LOADING_STATUS', status: { isLoading: false } });
+    post({ type: 'I18N_RESULT', result });
+    post({ type: 'I18N_KEYS', keys: i18nKeys });
+    
+    const msg = duplicateCount > 0 
+      ? `✓ 成功生成 ${uniqueKeys.length} 个 i18n keys（已去重 ${duplicateCount} 个）`
+      : `✓ 成功生成 ${uniqueKeys.length} 个 i18n keys`;
+    figma.notify(msg);
+    
+  } catch (e) {
+    figma.notify('生成失败: ' + (e as Error).message);
+    post({ type: 'LOADING_STATUS', status: { isLoading: false } });
+    post({ type: 'ERROR', message: (e as Error).message });
+  }
+}
+
+async function doExportI18n(format: 'bulkadd' | 'multicheck' | 'json' | 'csv', projectName: string) {
+  try {
+    let data: string;
+    let filename: string;
+    
+    if (format === 'bulkadd') {
+      data = exportBulkaddData(i18nKeys);
+      filename = `i18n_bulkadd_${projectName}_${Date.now()}.txt`;
+    } else if (format === 'multicheck') {
+      data = exportMultiCheckCommand(i18nKeys, projectName);
+      filename = `i18n_multicheck_${projectName}_${Date.now()}.txt`;
+    } else if (format === 'json') {
+      data = exportAsJSON(i18nKeys);
+      filename = `i18n_keys_${projectName}_${Date.now()}.json`;
+    } else {
+      data = exportAsCSV(i18nKeys);
+      filename = `i18n_keys_${projectName}_${Date.now()}.csv`;
+    }
+    
+    post({ type: 'EXPORT_DATA', format, data });
+    figma.notify(`✓ 导出成功：${filename}`);
+    
+  } catch (e) {
+    figma.notify('导出失败: ' + (e as Error).message);
+  }
+}
+
+async function doCopySingleAddCommand(keyId: string, projectName: string) {
+  try {
+    const key = i18nKeys.find(k => k.id === keyId);
+    if (!key) {
+      figma.notify('Key not found');
+      return;
+    }
+    
+    const command = exportSingleAddCommand(key, projectName);
+    
+    // Send to UI for clipboard copy
+    post({ type: 'COPY_TO_CLIPBOARD_ACK', text: command });
+    figma.notify(`✓ 已复制: ${key.key}`);
+    
+  } catch (e) {
+    figma.notify('复制失败: ' + (e as Error).message);
+  }
+}
+
+async function doCreateI18nTable() {
+  try {
+    post({ type: 'LOADING_STATUS', status: { isLoading: true, message: '正在创建 Figma 表格...' } });
+    
+    await createI18nTable(i18nKeys);
+    
+    post({ type: 'LOADING_STATUS', status: { isLoading: false } });
+    figma.notify(`✓ 成功创建表格：${i18nKeys.filter(k => k.selected).length} 行`);
+    
+  } catch (e) {
+    figma.notify('创建表格失败: ' + (e as Error).message);
+    post({ type: 'LOADING_STATUS', status: { isLoading: false } });
+  }
+}
 
 // ============ CREATE TABLE IN FIGMA ============
 

@@ -1,4 +1,4 @@
-export type Mode = 'prd' | 'tracker';
+export type Mode = 'prd' | 'tracker' | 'i18n';
 
 export interface Settings {
   openRouterApiKey: string;
@@ -8,6 +8,8 @@ export interface Settings {
   confluenceUrl?: string; // e.g., https://your-domain.atlassian.net
   confluenceEmail?: string; // Your Atlassian account email
   confluenceApiToken?: string; // API token from https://id.atlassian.com/manage-profile/security/api-tokens
+  // Lokalise project configuration
+  lokaliseProject?: string; // Default project name (e.g., v5)
 }
 
 export interface FrameData {
@@ -76,6 +78,30 @@ export interface TrackingEvent {
   selected?: boolean;          // 是否被选中导出（用于批量模式）
 }
 
+// i18n Key data structure (all English output)
+export interface I18nKey {
+  id: string;                    // Unique identifier
+  nodeId: string;                // Figma node ID
+  nodeName: string;              // Node name
+  frameName: string;             // Frame name
+  key: string;                   // English key (e.g., button_submit)
+  value: string;                 // English value (e.g., Submit)
+  originalText: string;          // Original text content
+  detectedLanguage: 'en' | 'zh' | 'other'; // Detected language
+  category?: string;             // Category (button/title/label/message)
+  context?: string;              // Business context description
+  selected?: boolean;            // Selected for export
+  edited?: boolean;              // User edited
+}
+
+// i18n generation result
+export interface I18nResult {
+  frames: string[];              // Frame names
+  keys: I18nKey[];
+  totalKeys: number;
+  screenshots?: string[];        // Screenshots for AI analysis
+}
+
 export type UIToPluginMessage =
   | { type: 'INIT' }
   | { type: 'SET_SETTINGS'; settings: Settings }
@@ -98,7 +124,16 @@ export type UIToPluginMessage =
   | { type: 'UPDATE_TASK_NAME'; taskId: string; taskName: string }
   | { type: 'UPDATE_TASK_CONFLUENCE_URL'; taskId: string; confluenceUrl: string }
   | { type: 'SYNC_TO_CONFLUENCE'; confluenceUrl: string; markdown: string }
-  | { type: 'TEST_CONFLUENCE_CONNECTION' };
+  | { type: 'TEST_CONFLUENCE_CONNECTION' }
+  // i18n messages
+  | { type: 'GENERATE_I18N_KEYS'; projectName?: string; additionalPrompt?: string; excludeTexts?: string[] }
+  | { type: 'UPDATE_I18N_KEY'; key: I18nKey }
+  | { type: 'TOGGLE_I18N_KEY'; id: string }
+  | { type: 'SELECT_ALL_I18N_KEYS'; selected: boolean }
+  | { type: 'DELETE_I18N_KEY'; id: string }
+  | { type: 'EXPORT_I18N'; format: 'bulkadd' | 'multicheck' | 'json' | 'csv'; projectName: string }
+  | { type: 'COPY_SINGLE_ADD_COMMAND'; keyId: string; projectName: string }
+  | { type: 'CREATE_I18N_TABLE' };
 
 export interface LoadingStatus {
   isLoading: boolean;
@@ -111,10 +146,14 @@ export type PluginToUIMessage =
   | { type: 'SCAN_CONTEXT'; context: ScanContext | null }
   | { type: 'PRD_RESULT'; result: PRDResult | null }
   | { type: 'TRACKING_EVENTS'; events: TrackingEvent[] }
-  | { type: 'EXPORT_DATA'; format: 'csv' | 'json'; data: string }
+  | { type: 'EXPORT_DATA'; format: 'csv' | 'json' | 'bulkadd' | 'multicheck'; data: string }
   | { type: 'LOADING_STATUS'; status: LoadingStatus }
   | { type: 'ERROR'; message: string }
   | { type: 'PRD_TASKS'; tasks: PRDTask[] }
   | { type: 'CURRENT_TASK'; task: PRDTask | null }
   | { type: 'OPEN_URL'; url: string }
-  | { type: 'COPY_TO_CLIPBOARD_ACK'; text: string };
+  | { type: 'COPY_TO_CLIPBOARD_ACK'; text: string }
+  | { type: 'CONFLUENCE_TEST_RESULT'; success: boolean; message: string; spaces?: { id: string; name: string }[] }
+  // i18n messages
+  | { type: 'I18N_KEYS'; keys: I18nKey[] }
+  | { type: 'I18N_RESULT'; result: I18nResult | null };
