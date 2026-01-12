@@ -112,16 +112,61 @@ function SettingsPanel({
           </div>
         </div>
 
+        <div className="hr" />
+        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 12 }}>Confluence 集成</div>
+        
         <div style={{ marginBottom: 12 }}>
-          <div className="label">Confluence Wiki URL (optional)</div>
+          <div className="label">Confluence URL</div>
           <input
             className="input"
-            value={settings.confluenceWikiUrl || ''}
-            onChange={(e) => onChange({ ...settings, confluenceWikiUrl: e.target.value || undefined })}
-            placeholder="https://your-company.atlassian.net/wiki/spaces/..."
+            value={settings.confluenceUrl || ''}
+            onChange={(e) => onChange({ ...settings, confluenceUrl: e.target.value || undefined })}
+            placeholder="https://your-domain.atlassian.net"
           />
           <div className="small" style={{ marginTop: 6 }}>
-            填写后可自动同步PRD到Wiki（需配置Atlassian MCP）
+            你的 Atlassian 域名地址
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <div className="label">Confluence Email</div>
+          <input
+            className="input"
+            type="email"
+            value={settings.confluenceEmail || ''}
+            onChange={(e) => onChange({ ...settings, confluenceEmail: e.target.value || undefined })}
+            placeholder="your-email@company.com"
+          />
+          <div className="small" style={{ marginTop: 6 }}>
+            你的 Atlassian 账号邮箱
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <div className="label">Confluence API Token</div>
+          <input
+            className="input"
+            type="password"
+            value={settings.confluenceApiToken || ''}
+            onChange={(e) => onChange({ ...settings, confluenceApiToken: e.target.value || undefined })}
+            placeholder="API Token"
+          />
+          <div className="small" style={{ marginTop: 6 }}>
+            获取：<span className="mono">id.atlassian.com/manage-profile/security/api-tokens</span>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <button 
+            className="btn" 
+            style={{ width: '100%' }} 
+            onClick={() => postMessage({ type: 'TEST_CONFLUENCE_CONNECTION' })}
+            disabled={!settings.confluenceUrl || !settings.confluenceEmail || !settings.confluenceApiToken}
+          >
+            🔍 测试 Confluence 连接
+          </button>
+          <div className="small" style={{ marginTop: 6 }}>
+            点击测试认证信息是否正确
           </div>
         </div>
 

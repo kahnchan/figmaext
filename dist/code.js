@@ -458,7 +458,7 @@ function scanFrameForInteractiveElements() {
 ;// ./src/shared/prd_kb.json
 const prd_kb_namespaceObject = /*#__PURE__*/JSON.parse('[{"feature":"收藏代币","background":"用户需要快速访问常用交易对，提高交易效率。","logic":"用户可在市场列表对交易对进行收藏/取消收藏；收藏列表只展示收藏项；收藏状态在页面切换时保持。","ac":"- 在市场列表页可收藏/取消收藏\\n- 收藏Tab只显示已收藏交易对\\n- 收藏为空时展示空态提示\\n- 收藏状态跨会话持久化（如本地/服务端）","keywords":["收藏","市场","交易对","tab","星标"]},{"feature":"价格提醒","background":"用户希望在价格达到阈值时收到提醒。","logic":"支持设置上/下穿阈值；提醒触发后可查看详情并关闭。","ac":"- 支持新增/删除提醒\\n- 支持上穿/下穿\\n- 触发后可跳转到交易页","keywords":["提醒","阈值","通知"]}]');
 ;// ./src/plugin/openrouter.ts
-async function openRouterChat(settings, messages) {
+async function openrouter_openRouterChat(settings, messages) {
     var _a, _b, _c;
     if (!settings.openRouterApiKey) {
         throw new Error('Missing OpenRouter API Key. Please set it in Settings.');
@@ -886,7 +886,7 @@ async function syncPRD(settings, context, additionalPrompt) {
         promptData.additionalRequirements = `用户的补充要求：${additionalPrompt.trim()}`;
     }
     const userPrompt = JSON.stringify(promptData, null, 2);
-    const raw = await openRouterChat(settings, [
+    const raw = await openrouter_openRouterChat(settings, [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
     ]);
@@ -1250,7 +1250,7 @@ Generate a tracking event based on what you SEE in the screenshots.`,
             { role: 'user', content: userPrompt },
         ];
     }
-    const raw = await openRouterChat(settings, messages);
+    const raw = await openrouter_openRouterChat(settings, messages);
     // Extract JSON
     const jsonText = extractJsonArray(raw) || extractJsonObject(raw);
     try {
@@ -1601,7 +1601,7 @@ Output JSON array. Be comprehensive - identify ALL clickable/interactive element
         { role: 'system', content: VISION_PAGE_ANALYSIS_PROMPT },
         { role: 'user', content: contentParts },
     ];
-    const raw = await openRouterChat(settings, messages);
+    const raw = await openrouter_openRouterChat(settings, messages);
     console.log('[Vision Analysis] Raw AI response length:', raw.length);
     const jsonText = extractJsonArray(raw);
     if (!jsonText) {
@@ -1669,6 +1669,33 @@ Output JSON array. Be comprehensive - identify ALL clickable/interactive element
 ;// ./src/plugin/confluence.ts
 
 /**
+ * Base64 encode a string (Figma plugin compatible)
+ */
+function base64Encode(str) {
+    // Convert string to Uint8Array manually (no TextEncoder in Figma plugin)
+    const utf8Bytes = [];
+    for (let i = 0; i < str.length; i++) {
+        let charCode = str.charCodeAt(i);
+        if (charCode < 0x80) {
+            utf8Bytes.push(charCode);
+        }
+        else if (charCode < 0x800) {
+            utf8Bytes.push(0xc0 | (charCode >> 6), 0x80 | (charCode & 0x3f));
+        }
+        else if (charCode < 0xd800 || charCode >= 0xe000) {
+            utf8Bytes.push(0xe0 | (charCode >> 12), 0x80 | ((charCode >> 6) & 0x3f), 0x80 | (charCode & 0x3f));
+        }
+        else {
+            // Surrogate pair
+            i++;
+            charCode = 0x10000 + (((charCode & 0x3ff) << 10) | (str.charCodeAt(i) & 0x3ff));
+            utf8Bytes.push(0xf0 | (charCode >> 18), 0x80 | ((charCode >> 12) & 0x3f), 0x80 | ((charCode >> 6) & 0x3f), 0x80 | (charCode & 0x3f));
+        }
+    }
+    const data = new Uint8Array(utf8Bytes);
+    return figma.base64Encode(data);
+}
+/**
  * Extract page ID from Confluence URL
  * Example: https://company.atlassian.net/wiki/spaces/SPACE/pages/123456/Page+Title
  */
@@ -1677,23 +1704,96 @@ function extractPageIdFromUrl(url) {
     return match ? match[1] : null;
 }
 /**
- * Fetch existing PRD content from Confluence
- * Note: This is a placeholder. In production, this would use Atlassian MCP or REST API
+ * Extract space key from Confluence URL
+ * Example: https://company.atlassian.net/wiki/spaces/MYSPACE/pages/123456/Page+Title
  */
-async function fetchConfluencePage(wikiUrl) {
+function extractSpaceKeyFromUrl(url) {
+    const match = url.match(/\/spaces\/([^/]+)/);
+    return match ? match[1] : null;
+}
+/**
+ * Convert Markdown to Confluence Storage Format (Atlassian Document Format)
+ */
+function markdownToConfluenceStorage(markdown) {
+    // Simple conversion - for production, consider using a proper library
+    let html = markdown
+        // Headers
+        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+        .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+        // Bold
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        // Italic
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        // Code blocks
+        .replace(/```(\w+)?\n([\s\S]+?)```/g, '<ac:structured-macro ac:name="code"><ac:parameter ac:name="language">$1</ac:parameter><ac:plain-text-body><![CDATA[$2]]></ac:plain-text-body></ac:structured-macro>')
+        // Inline code
+        .replace(/`(.+?)`/g, '<code>$1</code>')
+        // Links
+        .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2">$1</a>')
+        // Images (including base64)
+        .replace(/!\[(.+?)\]\((data:image\/png;base64,.+?)\)/g, '<ac:image><ri:attachment ri:filename="$1.png" /></ac:image>')
+        .replace(/!\[(.+?)\]\((.+?)\)/g, '<ac:image><ri:url ri:value="$2" /></ac:image>')
+        // Lists
+        .replace(/^- (.+)$/gm, '<li>$1</li>')
+        // Paragraphs
+        .replace(/\n\n/g, '</p><p>')
+        // Line breaks
+        .replace(/\n/g, '<br/>');
+    return `<p>${html}</p>`;
+}
+/**
+ * Fetch existing PRD content from Confluence using REST API v2
+ */
+async function fetchConfluencePage(wikiUrl, auth) {
+    var _a, _b, _c;
     try {
         const pageId = extractPageIdFromUrl(wikiUrl);
         if (!pageId) {
             throw new Error('Invalid Confluence URL format');
         }
-        // TODO: Implement actual Confluence API call or MCP integration
-        // For now, return null to indicate no existing content
-        console.log('[Confluence] Would fetch page:', pageId);
-        return null;
+        // Confluence REST API v2 endpoint
+        const apiUrl = `${auth.url}/wiki/api/v2/pages/${pageId}?body-format=storage`;
+        console.log('[Confluence Debug] Fetching page:', {
+            url: apiUrl,
+            pageId,
+            authUrl: auth.url,
+            authEmail: auth.email,
+        });
+        const response = await fetch(apiUrl, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Basic ${base64Encode(`${auth.email}:${auth.apiToken}`)}`,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            },
+        });
+        console.log('[Confluence Debug] Response:', {
+            status: response.status,
+            statusText: response.statusText,
+            ok: response.ok,
+        });
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => 'Unable to read error');
+            console.error('[Confluence Debug] Error response:', errorText);
+            throw new Error(`Confluence API error: ${response.status} ${response.statusText}. ${errorText}`);
+        }
+        const data = await response.json();
+        console.log('[Confluence Debug] Page fetched successfully:', {
+            id: data.id,
+            title: data.title,
+        });
+        return {
+            id: data.id,
+            title: data.title,
+            content: ((_b = (_a = data.body) === null || _a === void 0 ? void 0 : _a.storage) === null || _b === void 0 ? void 0 : _b.value) || '',
+            version: ((_c = data.version) === null || _c === void 0 ? void 0 : _c.number) || 1,
+            url: wikiUrl,
+        };
     }
     catch (e) {
         console.error('[Confluence] Failed to fetch page:', e);
-        return null;
+        throw e;
     }
 }
 /**
@@ -1771,34 +1871,277 @@ Output format:
     };
 }
 /**
- * Sync PRD to Confluence
- * Note: This is a placeholder for MCP integration
+ * Sync PRD to Confluence using REST API v2
  */
-async function syncToConfluence(wikiUrl, prdContent, title) {
+async function syncToConfluence(wikiUrl, prdContent, title, auth) {
     try {
+        console.log('[Confluence Debug] Starting sync:', {
+            wikiUrl,
+            title,
+            contentLength: prdContent.length,
+            authUrl: auth.url,
+            authEmail: auth.email,
+        });
         const pageId = extractPageIdFromUrl(wikiUrl);
-        if (!pageId) {
+        const spaceKey = extractSpaceKeyFromUrl(wikiUrl);
+        console.log('[Confluence Debug] Parsed URL:', { pageId, spaceKey });
+        if (!pageId && !spaceKey) {
             return {
                 success: false,
                 message: 'Invalid Confluence URL format. Expected: https://company.atlassian.net/wiki/spaces/SPACE/pages/123456/Page+Title',
             };
         }
-        // TODO: Implement actual Confluence API call or MCP integration
-        // This would use Atlassian MCP server to update the page
-        console.log('[Confluence] Would sync to page:', pageId);
-        console.log('[Confluence] Title:', title);
-        console.log('[Confluence] Content length:', prdContent.length);
-        // For now, return a placeholder response
+        // Convert markdown to Confluence storage format
+        const storageContent = markdownToConfluenceStorage(prdContent);
+        console.log('[Confluence Debug] Converted to storage format, length:', storageContent.length);
+        let result;
+        if (pageId) {
+            console.log('[Confluence Debug] Updating existing page:', pageId);
+            // Update existing page
+            result = await updateConfluencePage(pageId, title, storageContent, auth);
+        }
+        else if (spaceKey) {
+            console.log('[Confluence Debug] Creating new page in space:', spaceKey);
+            // Create new page
+            result = await createConfluencePage(spaceKey, title, storageContent, auth);
+        }
+        else {
+            return {
+                success: false,
+                message: 'Could not determine page ID or space key from URL',
+            };
+        }
+        console.log('[Confluence Debug] Sync result:', result);
+        return result;
+    }
+    catch (e) {
+        console.error('[Confluence Debug] Sync error:', e);
         return {
             success: false,
-            message: 'Confluence MCP integration not yet configured. Please set up Atlassian MCP server to enable auto-sync.',
-            url: wikiUrl,
+            message: `Failed to sync to Confluence: ${e.message}. Stack: ${e.stack}`,
+        };
+    }
+}
+/**
+ * Create a new Confluence page
+ */
+async function createConfluencePage(spaceKey, title, content, auth) {
+    try {
+        const apiUrl = `${auth.url}/wiki/api/v2/pages`;
+        const requestBody = {
+            spaceId: spaceKey,
+            status: 'current',
+            title: title,
+            body: {
+                representation: 'storage',
+                value: content,
+            },
+        };
+        console.log('[Confluence Debug] Creating page:', {
+            apiUrl,
+            spaceKey,
+            title,
+            contentLength: content.length,
+        });
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Basic ${base64Encode(`${auth.email}:${auth.apiToken}`)}`,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+        });
+        console.log('[Confluence Debug] Create response:', {
+            status: response.status,
+            statusText: response.statusText,
+            ok: response.ok,
+        });
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => 'Unable to read error');
+            console.error('[Confluence Debug] Create error response:', errorText);
+            let errorData;
+            try {
+                errorData = JSON.parse(errorText);
+            }
+            catch (_a) {
+                errorData = { rawError: errorText };
+            }
+            throw new Error(`Confluence API error: ${response.status} ${response.statusText}. ${JSON.stringify(errorData)}`);
+        }
+        const data = await response.json();
+        const pageUrl = `${auth.url}/wiki${data._links.webui}`;
+        console.log('[Confluence Debug] Page created successfully:', {
+            pageId: data.id,
+            pageUrl,
+        });
+        return {
+            success: true,
+            message: `PRD successfully created in Confluence!`,
+            url: pageUrl,
         };
     }
     catch (e) {
+        console.error('[Confluence Debug] Create page error:', e);
         return {
             success: false,
-            message: `Failed to sync to Confluence: ${e.message}`,
+            message: `Failed to create page: ${e.message}`,
+        };
+    }
+}
+/**
+ * Update an existing Confluence page
+ */
+async function updateConfluencePage(pageId, title, content, auth) {
+    var _a;
+    try {
+        console.log('[Confluence Debug] Fetching current page version...');
+        // First, fetch the current version
+        const currentPage = await fetchConfluencePage(`${auth.url}/wiki/spaces/TEMP/pages/${pageId}`, auth);
+        if (!currentPage) {
+            throw new Error('Failed to fetch current page version');
+        }
+        console.log('[Confluence Debug] Current version:', currentPage.version);
+        const apiUrl = `${auth.url}/wiki/api/v2/pages/${pageId}`;
+        const requestBody = {
+            id: pageId,
+            status: 'current',
+            title: title,
+            body: {
+                representation: 'storage',
+                value: content,
+            },
+            version: {
+                number: currentPage.version + 1,
+                message: 'Updated by Figma PRD Plugin',
+            },
+        };
+        console.log('[Confluence Debug] Updating page:', {
+            apiUrl,
+            pageId,
+            title,
+            newVersion: currentPage.version + 1,
+            contentLength: content.length,
+        });
+        const response = await fetch(apiUrl, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Basic ${base64Encode(`${auth.email}:${auth.apiToken}`)}`,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+        });
+        console.log('[Confluence Debug] Update response:', {
+            status: response.status,
+            statusText: response.statusText,
+            ok: response.ok,
+        });
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => 'Unable to read error');
+            console.error('[Confluence Debug] Update error response:', errorText);
+            let errorData;
+            try {
+                errorData = JSON.parse(errorText);
+            }
+            catch (_b) {
+                errorData = { rawError: errorText };
+            }
+            throw new Error(`Confluence API error: ${response.status} ${response.statusText}. ${JSON.stringify(errorData)}`);
+        }
+        const data = await response.json();
+        const pageUrl = `${auth.url}/wiki${data._links.webui}`;
+        console.log('[Confluence Debug] Page updated successfully:', {
+            pageId: data.id,
+            pageUrl,
+            newVersion: (_a = data.version) === null || _a === void 0 ? void 0 : _a.number,
+        });
+        return {
+            success: true,
+            message: `PRD successfully updated in Confluence!`,
+            url: pageUrl,
+        };
+    }
+    catch (e) {
+        console.error('[Confluence Debug] Update page error:', e);
+        return {
+            success: false,
+            message: `Failed to update page: ${e.message}`,
+        };
+    }
+}
+/**
+ * Test Confluence connection and authentication
+ */
+async function testConfluenceConnection(auth) {
+    var _a, _b, _c;
+    try {
+        console.log('[Confluence Debug] Testing connection:', {
+            url: auth.url,
+            email: auth.email,
+        });
+        // Try to fetch user info to test authentication
+        const apiUrl = `${auth.url}/wiki/api/v2/spaces?limit=1`;
+        console.log('[Confluence Debug] Test API URL:', apiUrl);
+        const response = await fetch(apiUrl, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Basic ${base64Encode(`${auth.email}:${auth.apiToken}`)}`,
+                'Accept': 'application/json',
+            },
+        });
+        console.log('[Confluence Debug] Test response:', {
+            status: response.status,
+            statusText: response.statusText,
+            ok: response.ok,
+        });
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => 'Unable to read error');
+            console.error('[Confluence Debug] Test error response:', errorText);
+            if (response.status === 401) {
+                return {
+                    success: false,
+                    message: '❌ 认证失败：请检查 Email 和 API Token 是否正确',
+                    details: { status: response.status, error: errorText },
+                };
+            }
+            else if (response.status === 404) {
+                return {
+                    success: false,
+                    message: '❌ Confluence URL 不正确：无法访问该地址',
+                    details: { status: response.status, error: errorText },
+                };
+            }
+            else {
+                return {
+                    success: false,
+                    message: `❌ 连接失败 (${response.status}): ${response.statusText}`,
+                    details: { status: response.status, error: errorText },
+                };
+            }
+        }
+        const data = await response.json();
+        console.log('[Confluence Debug] Test successful, spaces found:', ((_a = data.results) === null || _a === void 0 ? void 0 : _a.length) || 0);
+        return {
+            success: true,
+            message: `✅ 连接成功！找到 ${((_b = data.results) === null || _b === void 0 ? void 0 : _b.length) || 0} 个 Space`,
+            details: { spaces: (_c = data.results) === null || _c === void 0 ? void 0 : _c.map((s) => s.name) },
+        };
+    }
+    catch (e) {
+        console.error('[Confluence Debug] Test connection error:', e);
+        const errorMessage = e.message;
+        if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+            return {
+                success: false,
+                message: '❌ 网络错误：无法连接到 Confluence（可能是 CORS 或网络问题）',
+                details: { error: errorMessage },
+            };
+        }
+        return {
+            success: false,
+            message: `❌ 测试失败: ${errorMessage}`,
+            details: { error: errorMessage },
         };
     }
 }
@@ -1890,37 +2233,111 @@ async function pushScanContext() {
         await doSyncPRD(undefined, ctx);
     }
 }
+async function doTestConfluenceConnection() {
+    try {
+        post({
+            type: 'LOADING_STATUS',
+            status: {
+                isLoading: true,
+                message: '正在测试 Confluence 连接...'
+            }
+        });
+        // Check if Confluence authentication is configured
+        if (!settings.confluenceUrl || !settings.confluenceEmail || !settings.confluenceApiToken) {
+            figma.notify('❌ 请先在设置中配置 Confluence 认证信息', { timeout: 5000 });
+            post({ type: 'ERROR', message: '请先在设置中配置 Confluence 认证信息' });
+            return;
+        }
+        console.log('[Debug] Testing Confluence connection with settings:', {
+            url: settings.confluenceUrl,
+            email: settings.confluenceEmail,
+            hasToken: !!settings.confluenceApiToken,
+        });
+        const result = await testConfluenceConnection({
+            url: settings.confluenceUrl,
+            email: settings.confluenceEmail,
+            apiToken: settings.confluenceApiToken,
+        });
+        console.log('[Debug] Test result:', result);
+        if (result.success) {
+            figma.notify(result.message, { timeout: 5000 });
+        }
+        else {
+            figma.notify(result.message, { timeout: 8000 });
+            post({ type: 'ERROR', message: result.message });
+        }
+    }
+    catch (error) {
+        const errorMsg = `❌ 测试失败: ${error.message}`;
+        console.error('[Debug] Test connection error:', error);
+        figma.notify(errorMsg, { timeout: 8000 });
+        post({ type: 'ERROR', message: errorMsg });
+    }
+    finally {
+        post({
+            type: 'LOADING_STATUS',
+            status: {
+                isLoading: false
+            }
+        });
+    }
+}
 async function doSyncToConfluence(confluenceUrl, markdown) {
     try {
         post({
             type: 'LOADING_STATUS',
             status: {
                 isLoading: true,
-                message: '正在准备同步...'
+                message: '正在同步到 Confluence...'
             }
         });
-        // 1. 自动复制 PRD 内容到剪贴板
-        post({
-            type: 'COPY_TO_CLIPBOARD_ACK',
-            text: markdown
+        // Check if Confluence authentication is configured
+        if (!settings.confluenceUrl || !settings.confluenceEmail || !settings.confluenceApiToken) {
+            // Fallback: Copy to clipboard and open URL
+            post({
+                type: 'COPY_TO_CLIPBOARD_ACK',
+                text: markdown
+            });
+            figma.notify('⚠️ 请先在设置中配置 Confluence 认证信息\n\nPRD 已复制到剪贴板，正在打开 Confluence 页面', {
+                timeout: 8000
+            });
+            post({
+                type: 'OPEN_URL',
+                url: confluenceUrl
+            });
+            return;
+        }
+        // Extract PRD title from markdown
+        const titleMatch = markdown.match(/^#\s+(.+)$/m);
+        const title = titleMatch ? titleMatch[1] : 'PRD Document';
+        // Sync to Confluence using REST API
+        const result = await syncToConfluence(confluenceUrl, markdown, title, {
+            url: settings.confluenceUrl,
+            email: settings.confluenceEmail,
+            apiToken: settings.confluenceApiToken,
         });
-        // 2. 在浏览器中打开 Confluence URL
-        // 注意：Figma Plugin 无法直接打开浏览器，需要通过 figma.showUI 传递消息
-        // 3. 提示用户
-        figma.notify('✅ PRD 已复制到剪贴板！\n\n正在打开 Confluence 页面，请在编辑器中粘贴（Cmd/Ctrl+V）', {
-            timeout: 8000
-        });
-        // 4. 发送打开 URL 的消息到 UI
-        post({
-            type: 'OPEN_URL',
-            url: confluenceUrl
-        });
-        // 未来可以集成 Confluence API 实现真正的自动同步
-        // const result = await syncToConfluence(confluenceUrl, markdown);
-        // figma.notify('✅ 已成功同步到 Confluence!');
+        if (result.success) {
+            figma.notify(`✅ ${result.message}`, { timeout: 5000 });
+            // Open the Confluence page
+            if (result.url) {
+                post({
+                    type: 'OPEN_URL',
+                    url: result.url
+                });
+            }
+        }
+        else {
+            figma.notify(`❌ ${result.message}`, { timeout: 8000 });
+            // Fallback: Copy to clipboard
+            post({
+                type: 'COPY_TO_CLIPBOARD_ACK',
+                text: markdown
+            });
+        }
     }
     catch (error) {
-        figma.notify('❌ 同步失败: ' + error.message);
+        figma.notify('❌ 同步失败: ' + error.message, { timeout: 8000 });
+        post({ type: 'ERROR', message: error.message });
     }
     finally {
         post({
@@ -1946,37 +2363,10 @@ async function doSyncPRD(additionalPrompt, ctx) {
                 message: '正在生成 PRD...'
             }
         });
-        // Generate new PRD
-        let result = await syncPRD(settings, context, additionalPrompt);
-        // If Confluence URL is configured, try to merge with existing content
-        if (settings.confluenceWikiUrl) {
-            post({
-                type: 'LOADING_STATUS',
-                status: {
-                    isLoading: true,
-                    message: '正在从 Confluence 获取现有文档...'
-                }
-            });
-            const existingPage = await fetchConfluencePage(settings.confluenceWikiUrl);
-            if (existingPage) {
-                post({
-                    type: 'LOADING_STATUS',
-                    status: {
-                        isLoading: true,
-                        message: '正在合并文档内容...'
-                    }
-                });
-                const merged = await compareAndMergePRD(settings, result, existingPage);
-                // Update result with merged content
-                result = Object.assign(Object.assign({}, result), { markdown: merged.mergedMarkdown });
-                figma.notify(`✓ 已与现有文档合并 (${merged.changes.length} 处变更)`);
-            }
-            // Optionally sync to Confluence (currently placeholder)
-            // const syncResult = await syncToConfluence(settings.confluenceWikiUrl, result.markdown, result.featureName);
-            // if (syncResult.success) {
-            //   figma.notify('✓ 已同步到 Confluence');
-            // }
-        }
+        // Generate new PRD (pure AI generation, no Confluence involved)
+        const result = await syncPRD(settings, context, additionalPrompt);
+        // Note: Confluence integration (fetching/merging) has been removed from the generation flow
+        // If you want to sync to Confluence, use the "🔄 同步" button after generation
         // Hide loading
         post({ type: 'LOADING_STATUS', status: { isLoading: false } });
         post({ type: 'PRD_RESULT', result });
@@ -2274,6 +2664,10 @@ figma.ui.onmessage = async (msg) => {
         }
         if (msg.type === 'SYNC_TO_CONFLUENCE') {
             await doSyncToConfluence(msg.confluenceUrl, msg.markdown);
+            return;
+        }
+        if (msg.type === 'TEST_CONFLUENCE_CONNECTION') {
+            await doTestConfluenceConnection();
             return;
         }
         if (msg.type === 'GENERATE_TRACKING_NOW') {

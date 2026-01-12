@@ -4,7 +4,10 @@ export interface Settings {
   openRouterApiKey: string;
   model: string;
   prdEndpointUrl?: string; // optional external KB endpoint
-  confluenceWikiUrl?: string; // Wiki page URL for PRD updates
+  // Confluence API authentication
+  confluenceUrl?: string; // e.g., https://your-domain.atlassian.net
+  confluenceEmail?: string; // Your Atlassian account email
+  confluenceApiToken?: string; // API token from https://id.atlassian.com/manage-profile/security/api-tokens
 }
 
 export interface FrameData {
@@ -94,7 +97,8 @@ export type UIToPluginMessage =
   | { type: 'DELETE_PRD_TASK'; taskId: string }
   | { type: 'UPDATE_TASK_NAME'; taskId: string; taskName: string }
   | { type: 'UPDATE_TASK_CONFLUENCE_URL'; taskId: string; confluenceUrl: string }
-  | { type: 'SYNC_TO_CONFLUENCE'; confluenceUrl: string; markdown: string };
+  | { type: 'SYNC_TO_CONFLUENCE'; confluenceUrl: string; markdown: string }
+  | { type: 'TEST_CONFLUENCE_CONNECTION' };
 
 export interface LoadingStatus {
   isLoading: boolean;

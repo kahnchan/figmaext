@@ -4,7 +4,7 @@ import type { Mode, PluginToUIMessage, Settings, TrackingEvent, UIToPluginMessag
 import { scanSelectedFrame, scanSelectedInteractiveNodes, exportNodeAsBase64, getRootFrame, scanFrameForInteractiveElements } from './scan';
 import { syncPRD } from './prd';
 import { attachTrackingToLayer, generateTrackingForNode, readTrackingFromLayer, analyzePageWithVision, type ElementHint } from './tracker';
-import { fetchConfluencePage, compareAndMergePRD, syncToConfluence } from './confluence';
+import { fetchConfluencePage, compareAndMergePRD, syncToConfluence, testConfluenceConnection } from './confluence';
 
 const STORAGE_SETTINGS = 'onekey_settings';
 const STORAGE_AUTOSYNC = 'onekey_autosync';
@@ -69,42 +69,128 @@ async function pushScanContext() {
   }
 }
 
+async function doTestConfluenceConnection() {
+  try {
+    post({
+      type: 'LOADING_STATUS',
+      status: {
+        isLoading: true,
+        message: '正在测试 Confluence 连接...'
+      }
+    });
+
+    // Check if Confluence authentication is configured
+    if (!settings.confluenceUrl || !settings.confluenceEmail || !settings.confluenceApiToken) {
+      figma.notify('❌ 请先在设置中配置 Confluence 认证信息', { timeout: 5000 });
+      post({ type: 'ERROR', message: '请先在设置中配置 Confluence 认证信息' });
+      return;
+    }
+
+    console.log('[Debug] Testing Confluence connection with settings:', {
+      url: settings.confluenceUrl,
+      email: settings.confluenceEmail,
+      hasToken: !!settings.confluenceApiToken,
+    });
+
+    const result = await testConfluenceConnection({
+      url: settings.confluenceUrl,
+      email: settings.confluenceEmail,
+      apiToken: settings.confluenceApiToken,
+    });
+
+    console.log('[Debug] Test result:', result);
+
+    if (result.success) {
+      figma.notify(result.message, { timeout: 5000 });
+    } else {
+      figma.notify(result.message, { timeout: 8000 });
+      post({ type: 'ERROR', message: result.message });
+    }
+
+  } catch (error) {
+    const errorMsg = `❌ 测试失败: ${(error as Error).message}`;
+    console.error('[Debug] Test connection error:', error);
+    figma.notify(errorMsg, { timeout: 8000 });
+    post({ type: 'ERROR', message: errorMsg });
+  } finally {
+    post({
+      type: 'LOADING_STATUS',
+      status: {
+        isLoading: false
+      }
+    });
+  }
+}
+
 async function doSyncToConfluence(confluenceUrl: string, markdown: string) {
   try {
     post({
       type: 'LOADING_STATUS',
       status: {
         isLoading: true,
-        message: '正在准备同步...'
+        message: '正在同步到 Confluence...'
       }
     });
 
-    // 1. 自动复制 PRD 内容到剪贴板
-    post({ 
-      type: 'COPY_TO_CLIPBOARD_ACK', 
-      text: markdown 
-    });
+    // Check if Confluence authentication is configured
+    if (!settings.confluenceUrl || !settings.confluenceEmail || !settings.confluenceApiToken) {
+      // Fallback: Copy to clipboard and open URL
+      post({ 
+        type: 'COPY_TO_CLIPBOARD_ACK', 
+        text: markdown 
+      });
 
-    // 2. 在浏览器中打开 Confluence URL
-    // 注意：Figma Plugin 无法直接打开浏览器，需要通过 figma.showUI 传递消息
-    
-    // 3. 提示用户
-    figma.notify('✅ PRD 已复制到剪贴板！\n\n正在打开 Confluence 页面，请在编辑器中粘贴（Cmd/Ctrl+V）', {
-      timeout: 8000
-    });
+      figma.notify('⚠️ 请先在设置中配置 Confluence 认证信息\n\nPRD 已复制到剪贴板，正在打开 Confluence 页面', {
+        timeout: 8000
+      });
 
-    // 4. 发送打开 URL 的消息到 UI
-    post({
-      type: 'OPEN_URL',
-      url: confluenceUrl
-    });
+      post({
+        type: 'OPEN_URL',
+        url: confluenceUrl
+      });
+      
+      return;
+    }
 
-    // 未来可以集成 Confluence API 实现真正的自动同步
-    // const result = await syncToConfluence(confluenceUrl, markdown);
-    // figma.notify('✅ 已成功同步到 Confluence!');
+    // Extract PRD title from markdown
+    const titleMatch = markdown.match(/^#\s+(.+)$/m);
+    const title = titleMatch ? titleMatch[1] : 'PRD Document';
+
+    // Sync to Confluence using REST API
+    const result = await syncToConfluence(
+      confluenceUrl,
+      markdown,
+      title,
+      {
+        url: settings.confluenceUrl,
+        email: settings.confluenceEmail,
+        apiToken: settings.confluenceApiToken,
+      }
+    );
+
+    if (result.success) {
+      figma.notify(`✅ ${result.message}`, { timeout: 5000 });
+      
+      // Open the Confluence page
+      if (result.url) {
+        post({
+          type: 'OPEN_URL',
+          url: result.url
+        });
+      }
+    } else {
+      figma.notify(`❌ ${result.message}`, { timeout: 8000 });
+      
+      // Fallback: Copy to clipboard
+      post({ 
+        type: 'COPY_TO_CLIPBOARD_ACK', 
+        text: markdown 
+      });
+    }
 
   } catch (error) {
-    figma.notify('❌ 同步失败: ' + (error as Error).message);
+    figma.notify('❌ 同步失败: ' + (error as Error).message, { timeout: 8000 });
+    post({ type: 'ERROR', message: (error as Error).message });
   } finally {
     post({
       type: 'LOADING_STATUS',
@@ -132,47 +218,11 @@ async function doSyncPRD(additionalPrompt?: string, ctx?: Awaited<ReturnType<typ
       } 
     });
     
-    // Generate new PRD
-    let result = await syncPRD(settings, context, additionalPrompt);
+    // Generate new PRD (pure AI generation, no Confluence involved)
+    const result = await syncPRD(settings, context, additionalPrompt);
     
-    // If Confluence URL is configured, try to merge with existing content
-    if (settings.confluenceWikiUrl) {
-      post({ 
-        type: 'LOADING_STATUS', 
-        status: { 
-          isLoading: true, 
-          message: '正在从 Confluence 获取现有文档...'
-        } 
-      });
-      
-      const existingPage = await fetchConfluencePage(settings.confluenceWikiUrl);
-      
-      if (existingPage) {
-        post({ 
-          type: 'LOADING_STATUS', 
-          status: { 
-            isLoading: true, 
-            message: '正在合并文档内容...'
-          } 
-        });
-        
-        const merged = await compareAndMergePRD(settings, result, existingPage);
-        
-        // Update result with merged content
-        result = {
-          ...result,
-          markdown: merged.mergedMarkdown,
-        };
-        
-        figma.notify(`✓ 已与现有文档合并 (${merged.changes.length} 处变更)`);
-      }
-      
-      // Optionally sync to Confluence (currently placeholder)
-      // const syncResult = await syncToConfluence(settings.confluenceWikiUrl, result.markdown, result.featureName);
-      // if (syncResult.success) {
-      //   figma.notify('✓ 已同步到 Confluence');
-      // }
-    }
+    // Note: Confluence integration (fetching/merging) has been removed from the generation flow
+    // If you want to sync to Confluence, use the "🔄 同步" button after generation
     
     // Hide loading
     post({ type: 'LOADING_STATUS', status: { isLoading: false } });
@@ -515,6 +565,11 @@ figma.ui.onmessage = async (msg: UIToPluginMessage) => {
 
     if (msg.type === 'SYNC_TO_CONFLUENCE') {
       await doSyncToConfluence(msg.confluenceUrl, msg.markdown);
+      return;
+    }
+
+    if (msg.type === 'TEST_CONFLUENCE_CONNECTION') {
+      await doTestConfluenceConnection();
       return;
     }
 

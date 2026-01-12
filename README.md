@@ -150,18 +150,42 @@
 
 ## 🔧 Confluence 集成
 
-详细配置指南请查看 [CONFLUENCE_SETUP.md](./CONFLUENCE_SETUP.md)
+### 🚀 全新：Confluence REST API 自动同步
+
+插件现已支持通过 Confluence REST API 实现**真正的自动同步**！
+
+**详细配置指南**：[CONFLUENCE_API_SETUP.md](./CONFLUENCE_API_SETUP.md)
+
+#### 快速配置（3步）
+```
+1. 获取 Confluence API Token
+   访问：id.atlassian.com/manage-profile/security/api-tokens
+   
+2. 在插件设置中填写：
+   - Confluence URL (例如：https://your-company.atlassian.net)
+   - Confluence Email（你的 Atlassian 账号邮箱）
+   - Confluence API Token
+   
+3. 点击 🔄 同步按钮，完成！
+```
+
+#### 支持的功能
+- ✅ **自动创建新页面**：在指定 Space 中创建新的 PRD 文档
+- ✅ **自动更新现有页面**：智能更新已有页面，保留版本历史
+- ✅ **嵌入 Figma 截图**：自动导出并嵌入设计稿截图
+- ✅ **Markdown 转 Confluence**：自动转换格式，支持表格、代码块、图片等
+- ✅ **版本管理**：自动记录每次更新
 
 ### 基础功能（无需配置）
 - ✅ 生成专业PRD文档
 - ✅ 复制到剪贴板
 - ✅ 手动粘贴到Confluence
 
-### 高级功能（需配置）
+### 传统集成方式（MCP）
+详细配置指南请查看 [CONFLUENCE_SETUP.md](./CONFLUENCE_SETUP.md)
 - ✅ 自动获取现有Wiki文档
 - ✅ AI智能合并新旧内容
 - ✅ 变更摘要和高亮
-- ⏳ 自动同步到Wiki（需Atlassian MCP）
 
 ## 💡 最佳实践
 
