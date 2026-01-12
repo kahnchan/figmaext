@@ -39,6 +39,16 @@ export interface PRDResult {
   matchedSections: string[];
 }
 
+export interface PRDTask {
+  taskId: string;
+  taskName: string;
+  prdResult: PRDResult | null;
+  confluenceUrl?: string;
+  scanContext: ScanContext | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface TrackingProperty {
   key: string;               // snake_case, e.g. token_symbol
   displayName: string;       // 显示名称, e.g. 代币名称
@@ -70,15 +80,21 @@ export type UIToPluginMessage =
   | { type: 'SET_MODE'; mode: Mode }
   | { type: 'SYNC_PRD_NOW'; additionalPrompt?: string }
   | { type: 'GENERATE_TRACKING_NOW' }
-  | { type: 'SCAN_PAGE_FOR_TRACKING' }  // 新增：扫描整个页面
+  | { type: 'SCAN_PAGE_FOR_TRACKING' }
   | { type: 'UPDATE_TRACKING_EVENT'; event: TrackingEvent }
-  | { type: 'TOGGLE_EVENT_SELECTION'; id: string }  // 新增：切换选中状态
-  | { type: 'SELECT_ALL_EVENTS'; selected: boolean }  // 新增：全选/取消全选
+  | { type: 'TOGGLE_EVENT_SELECTION'; id: string }
+  | { type: 'SELECT_ALL_EVENTS'; selected: boolean }
   | { type: 'DELETE_TRACKING_EVENT'; id: string }
   | { type: 'DELETE_ALL_EVENTS' }
   | { type: 'ATTACH_TRACKING_TO_LAYER'; id: string }
   | { type: 'EXPORT_TRACKING'; format: 'csv' | 'json' }
-  | { type: 'CREATE_TRACKING_TABLE' };  // 在 Figma 中创建埋点表格
+  | { type: 'CREATE_TRACKING_TABLE' }
+  | { type: 'CREATE_PRD_TASK' }
+  | { type: 'SELECT_PRD_TASK'; taskId: string }
+  | { type: 'DELETE_PRD_TASK'; taskId: string }
+  | { type: 'UPDATE_TASK_NAME'; taskId: string; taskName: string }
+  | { type: 'UPDATE_TASK_CONFLUENCE_URL'; taskId: string; confluenceUrl: string }
+  | { type: 'SYNC_TO_CONFLUENCE'; confluenceUrl: string; markdown: string };
 
 export interface LoadingStatus {
   isLoading: boolean;
@@ -93,4 +109,8 @@ export type PluginToUIMessage =
   | { type: 'TRACKING_EVENTS'; events: TrackingEvent[] }
   | { type: 'EXPORT_DATA'; format: 'csv' | 'json'; data: string }
   | { type: 'LOADING_STATUS'; status: LoadingStatus }
-  | { type: 'ERROR'; message: string };
+  | { type: 'ERROR'; message: string }
+  | { type: 'PRD_TASKS'; tasks: PRDTask[] }
+  | { type: 'CURRENT_TASK'; task: PRDTask | null }
+  | { type: 'OPEN_URL'; url: string }
+  | { type: 'COPY_TO_CLIPBOARD_ACK'; text: string };

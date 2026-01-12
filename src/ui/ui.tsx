@@ -147,6 +147,7 @@ function PRDSyncView({
   onToggleAutoSync: (v: boolean) => void;
 }) {
   const [additionalPrompt, setAdditionalPrompt] = React.useState('');
+  const [confluenceUrl, setConfluenceUrl] = React.useState('');
   const frameCount = context?.frames ? context.frames.length : (context ? 1 : 0);
   const isMultiFrame = frameCount > 1;
 
@@ -222,7 +223,21 @@ function PRDSyncView({
                 }}
               />
               
-              <div className="row" style={{ gap: 8 }}>
+              <div className="small" style={{ marginBottom: 6 }}>Confluence Wiki URL（可选）：</div>
+              <input
+                className="input"
+                value={confluenceUrl}
+                onChange={(e) => setConfluenceUrl(e.target.value)}
+                placeholder="https://your-company.atlassian.net/wiki/spaces/..."
+                style={{ 
+                  width: '100%', 
+                  marginBottom: 12,
+                  fontFamily: 'inherit',
+                  fontSize: '12px'
+                }}
+              />
+              
+              <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
                 <button 
                   className="btn btnPrimary" 
                   onClick={() => postMessage({ 
@@ -230,7 +245,7 @@ function PRDSyncView({
                     additionalPrompt: additionalPrompt || undefined
                   })}
                 >
-                  🔄 重新生成 PRD
+                  🔄 重新生成
                 </button>
                 <button 
                   className="btn" 
@@ -252,6 +267,30 @@ function PRDSyncView({
                   title="复制 PRD 到剪贴板"
                 >
                   📋 复制
+                </button>
+                <button
+                  className="btn"
+                  onClick={() => {
+                    if (!confluenceUrl) {
+                      alert('请先填写 Confluence Wiki URL');
+                      return;
+                    }
+                    if (confirm(`确认同步到 Confluence?\n\n${confluenceUrl}`)) {
+                      postMessage({
+                        type: 'SYNC_TO_CONFLUENCE',
+                        confluenceUrl,
+                        markdown: result.markdown
+                      });
+                    }
+                  }}
+                  disabled={!confluenceUrl}
+                  title="同步 PRD 到 Confluence Wiki"
+                  style={{ 
+                    opacity: confluenceUrl ? 1 : 0.5,
+                    cursor: confluenceUrl ? 'pointer' : 'not-allowed'
+                  }}
+                >
+                  🔄 同步
                 </button>
               </div>
             </div>
@@ -278,6 +317,20 @@ function PRDSyncView({
                   width: '100%', 
                   marginBottom: 8,
                   resize: 'vertical',
+                  fontFamily: 'inherit',
+                  fontSize: '12px'
+                }}
+              />
+              
+              <div className="small" style={{ marginBottom: 6 }}>Confluence Wiki URL（可选）：</div>
+              <input
+                className="input"
+                value={confluenceUrl}
+                onChange={(e) => setConfluenceUrl(e.target.value)}
+                placeholder="https://your-company.atlassian.net/wiki/spaces/..."
+                style={{ 
+                  width: '100%', 
+                  marginBottom: 12,
                   fontFamily: 'inherit',
                   fontSize: '12px'
                 }}
@@ -589,6 +642,28 @@ function App() {
         if (msg.status.isLoading) {
           setError(null);
         }
+        return;
+      }
+
+      if (msg.type === 'COPY_TO_CLIPBOARD_ACK') {
+        // 复制到剪贴板
+        navigator.clipboard.writeText(msg.text).catch(() => {
+          // Fallback method
+          const textarea = document.createElement('textarea');
+          textarea.value = msg.text;
+          textarea.style.position = 'fixed';
+          textarea.style.opacity = '0';
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textarea);
+        });
+        return;
+      }
+
+      if (msg.type === 'OPEN_URL') {
+        // 在新窗口打开 URL
+        window.open(msg.url, '_blank');
         return;
       }
     }

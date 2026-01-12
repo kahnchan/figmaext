@@ -1890,6 +1890,47 @@ async function pushScanContext() {
         await doSyncPRD(undefined, ctx);
     }
 }
+async function doSyncToConfluence(confluenceUrl, markdown) {
+    try {
+        post({
+            type: 'LOADING_STATUS',
+            status: {
+                isLoading: true,
+                message: '正在准备同步...'
+            }
+        });
+        // 1. 自动复制 PRD 内容到剪贴板
+        post({
+            type: 'COPY_TO_CLIPBOARD_ACK',
+            text: markdown
+        });
+        // 2. 在浏览器中打开 Confluence URL
+        // 注意：Figma Plugin 无法直接打开浏览器，需要通过 figma.showUI 传递消息
+        // 3. 提示用户
+        figma.notify('✅ PRD 已复制到剪贴板！\n\n正在打开 Confluence 页面，请在编辑器中粘贴（Cmd/Ctrl+V）', {
+            timeout: 8000
+        });
+        // 4. 发送打开 URL 的消息到 UI
+        post({
+            type: 'OPEN_URL',
+            url: confluenceUrl
+        });
+        // 未来可以集成 Confluence API 实现真正的自动同步
+        // const result = await syncToConfluence(confluenceUrl, markdown);
+        // figma.notify('✅ 已成功同步到 Confluence!');
+    }
+    catch (error) {
+        figma.notify('❌ 同步失败: ' + error.message);
+    }
+    finally {
+        post({
+            type: 'LOADING_STATUS',
+            status: {
+                isLoading: false
+            }
+        });
+    }
+}
 async function doSyncPRD(additionalPrompt, ctx) {
     const context = ctx || await scanSelectedFrame();
     if (!context) {
@@ -2229,6 +2270,10 @@ figma.ui.onmessage = async (msg) => {
         }
         if (msg.type === 'SYNC_PRD_NOW') {
             await doSyncPRD(msg.additionalPrompt);
+            return;
+        }
+        if (msg.type === 'SYNC_TO_CONFLUENCE') {
+            await doSyncToConfluence(msg.confluenceUrl, msg.markdown);
             return;
         }
         if (msg.type === 'GENERATE_TRACKING_NOW') {

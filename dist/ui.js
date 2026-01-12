@@ -5378,6 +5378,7 @@ function SettingsPanel({ settings, onChange, onSave, onClose, }) {
 function PRDSyncView({ context, result, autoSync, onToggleAutoSync, }) {
     var _a, _b;
     const [additionalPrompt, setAdditionalPrompt] = react.useState('');
+    const [confluenceUrl, setConfluenceUrl] = react.useState('');
     const frameCount = (context === null || context === void 0 ? void 0 : context.frames) ? context.frames.length : (context ? 1 : 0);
     const isMultiFrame = frameCount > 1;
     return ((0,jsx_runtime.jsxs)("div", { className: "content", children: [(0,jsx_runtime.jsxs)("div", { className: "card", style: { marginBottom: 12 }, children: [(0,jsx_runtime.jsx)("div", { className: "label", style: { marginBottom: 8 }, children: isMultiFrame ? `Selected Frames (${frameCount})` : 'Selected Frame' }), isMultiFrame && (context === null || context === void 0 ? void 0 : context.frames) ? ((0,jsx_runtime.jsxs)("div", { children: [(0,jsx_runtime.jsxs)("div", { style: { fontSize: 12, fontWeight: 600, marginBottom: 4 }, children: [context.frames[0].frameName, " \u2192 ... \u2192 ", context.frames[frameCount - 1].frameName] }), (0,jsx_runtime.jsxs)("div", { className: "small", children: ["\u5B8C\u6574\u4EA7\u54C1\u6D41\u7A0B\uFF08", frameCount, " \u4E2A\u5C4F\u5E55\uFF09"] })] })) : ((0,jsx_runtime.jsxs)("div", { children: [(0,jsx_runtime.jsx)("div", { style: { fontSize: 12, fontWeight: 600 }, children: context ? context.frameName : 'None' }), context && ((0,jsx_runtime.jsxs)("div", { className: "small", style: { marginTop: 6 }, children: ["Text nodes: ", (0,jsx_runtime.jsx)("span", { className: "mono", children: ((_a = context.texts) === null || _a === void 0 ? void 0 : _a.length) || 0 }), " \u00B7 Components:", ' ', (0,jsx_runtime.jsx)("span", { className: "mono", children: ((_b = context.componentNames) === null || _b === void 0 ? void 0 : _b.length) || 0 })] }))] }))] }), (0,jsx_runtime.jsxs)("div", { className: "card", children: [(0,jsx_runtime.jsx)("div", { className: "label", style: { marginBottom: 8 }, children: "PRD Output" }), (0,jsx_runtime.jsx)("div", { className: "hr" }), result ? ((0,jsx_runtime.jsxs)(jsx_runtime.Fragment, { children: [(0,jsx_runtime.jsxs)("div", { style: {
@@ -5391,10 +5392,15 @@ function PRDSyncView({ context, result, autoSync, onToggleAutoSync, }) {
                                             resize: 'vertical',
                                             fontFamily: 'inherit',
                                             fontSize: '12px'
-                                        } }), (0,jsx_runtime.jsxs)("div", { className: "row", style: { gap: 8 }, children: [(0,jsx_runtime.jsx)("button", { className: "btn btnPrimary", onClick: () => postMessage({
+                                        } }), (0,jsx_runtime.jsx)("div", { className: "small", style: { marginBottom: 6 }, children: "Confluence Wiki URL\uFF08\u53EF\u9009\uFF09\uFF1A" }), (0,jsx_runtime.jsx)("input", { className: "input", value: confluenceUrl, onChange: (e) => setConfluenceUrl(e.target.value), placeholder: "https://your-company.atlassian.net/wiki/spaces/...", style: {
+                                            width: '100%',
+                                            marginBottom: 12,
+                                            fontFamily: 'inherit',
+                                            fontSize: '12px'
+                                        } }), (0,jsx_runtime.jsxs)("div", { className: "row", style: { gap: 8, flexWrap: 'wrap' }, children: [(0,jsx_runtime.jsx)("button", { className: "btn btnPrimary", onClick: () => postMessage({
                                                     type: 'SYNC_PRD_NOW',
                                                     additionalPrompt: additionalPrompt || undefined
-                                                }), children: "\uD83D\uDD04 \u91CD\u65B0\u751F\u6210 PRD" }), (0,jsx_runtime.jsx)("button", { className: "btn", onClick: () => {
+                                                }), children: "\uD83D\uDD04 \u91CD\u65B0\u751F\u6210" }), (0,jsx_runtime.jsx)("button", { className: "btn", onClick: () => {
                                                     const textarea = document.createElement('textarea');
                                                     textarea.value = result.markdown;
                                                     textarea.style.position = 'fixed';
@@ -5409,12 +5415,32 @@ function PRDSyncView({ context, result, autoSync, onToggleAutoSync, }) {
                                                         alert('复制失败，请手动选择文本复制');
                                                     }
                                                     document.body.removeChild(textarea);
-                                                }, title: "\u590D\u5236 PRD \u5230\u526A\u8D34\u677F", children: "\uD83D\uDCCB \u590D\u5236" })] })] })] })) : ((0,jsx_runtime.jsxs)(jsx_runtime.Fragment, { children: [(0,jsx_runtime.jsx)("div", { className: "small", style: { marginBottom: 12 }, children: isMultiFrame
+                                                }, title: "\u590D\u5236 PRD \u5230\u526A\u8D34\u677F", children: "\uD83D\uDCCB \u590D\u5236" }), (0,jsx_runtime.jsx)("button", { className: "btn", onClick: () => {
+                                                    if (!confluenceUrl) {
+                                                        alert('请先填写 Confluence Wiki URL');
+                                                        return;
+                                                    }
+                                                    if (confirm(`确认同步到 Confluence?\n\n${confluenceUrl}`)) {
+                                                        postMessage({
+                                                            type: 'SYNC_TO_CONFLUENCE',
+                                                            confluenceUrl,
+                                                            markdown: result.markdown
+                                                        });
+                                                    }
+                                                }, disabled: !confluenceUrl, title: "\u540C\u6B65 PRD \u5230 Confluence Wiki", style: {
+                                                    opacity: confluenceUrl ? 1 : 0.5,
+                                                    cursor: confluenceUrl ? 'pointer' : 'not-allowed'
+                                                }, children: "\uD83D\uDD04 \u540C\u6B65" })] })] })] })) : ((0,jsx_runtime.jsxs)(jsx_runtime.Fragment, { children: [(0,jsx_runtime.jsx)("div", { className: "small", style: { marginBottom: 12 }, children: isMultiFrame
                                     ? '选择多个 Frame（按住 Shift/Cmd 多选），然后点击下方按钮生成 PRD。'
                                     : '选择一个 Frame，然后点击下方按钮生成 PRD。' }), (0,jsx_runtime.jsx)("div", { className: "hr" }), (0,jsx_runtime.jsxs)("div", { style: { marginTop: 12 }, children: [(0,jsx_runtime.jsx)("div", { className: "small", style: { marginBottom: 6 }, children: "\u8865\u5145\u63D0\u793A\uFF08\u53EF\u9009\uFF09\uFF1A" }), (0,jsx_runtime.jsx)("textarea", { className: "input", placeholder: "\u4F8B\u5982\uFF1A\u91CD\u70B9\u5173\u6CE8\u98CE\u9669\u63D0\u793A\u76F8\u5173\u7684\u57CB\u70B9", value: additionalPrompt, onChange: (e) => setAdditionalPrompt(e.target.value), rows: 2, style: {
                                             width: '100%',
                                             marginBottom: 8,
                                             resize: 'vertical',
+                                            fontFamily: 'inherit',
+                                            fontSize: '12px'
+                                        } }), (0,jsx_runtime.jsx)("div", { className: "small", style: { marginBottom: 6 }, children: "Confluence Wiki URL\uFF08\u53EF\u9009\uFF09\uFF1A" }), (0,jsx_runtime.jsx)("input", { className: "input", value: confluenceUrl, onChange: (e) => setConfluenceUrl(e.target.value), placeholder: "https://your-company.atlassian.net/wiki/spaces/...", style: {
+                                            width: '100%',
+                                            marginBottom: 12,
                                             fontFamily: 'inherit',
                                             fontSize: '12px'
                                         } }), (0,jsx_runtime.jsx)("div", { className: "row", style: { gap: 8 }, children: (0,jsx_runtime.jsx)("button", { className: "btn btnPrimary", onClick: () => postMessage({
@@ -5511,6 +5537,26 @@ function App() {
                 if (msg.status.isLoading) {
                     setError(null);
                 }
+                return;
+            }
+            if (msg.type === 'COPY_TO_CLIPBOARD_ACK') {
+                // 复制到剪贴板
+                navigator.clipboard.writeText(msg.text).catch(() => {
+                    // Fallback method
+                    const textarea = document.createElement('textarea');
+                    textarea.value = msg.text;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                });
+                return;
+            }
+            if (msg.type === 'OPEN_URL') {
+                // 在新窗口打开 URL
+                window.open(msg.url, '_blank');
                 return;
             }
         }
