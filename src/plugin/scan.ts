@@ -1,4 +1,4 @@
-import type { ScanContext } from '@shared/messages';
+import type { ScanContext, FrameData } from '@shared/messages';
 
 function isFrame(node: SceneNode): node is FrameNode {
   return node.type === 'FRAME';
@@ -8,38 +8,67 @@ function uniq(arr: string[]): string[] {
   return Array.from(new Set(arr)).filter(Boolean);
 }
 
-export function scanSelectedFrame(): ScanContext | null {
+export async function scanSelectedFrame(): Promise<ScanContext | null> {
   const selection = figma.currentPage.selection;
-  if (selection.length !== 1) return null;
+  if (selection.length === 0) return null;
 
-  const node = selection[0];
-  if (!isFrame(node)) return null;
-
-  const texts: string[] = [];
-  const componentNames: string[] = [];
-
-  const descendants = node.findAll(() => true);
-  for (const d of descendants) {
-    if (d.type === 'TEXT') {
-      const t = (d as TextNode).characters?.trim();
-      if (t) texts.push(t);
-    }
-
-    if (d.type === 'INSTANCE') {
-      const inst = d as InstanceNode;
-      componentNames.push(inst.mainComponent?.name || inst.name);
-    }
-
-    if (d.type === 'COMPONENT') {
-      componentNames.push(d.name);
+  // Support both single and multiple frame selection
+  const frames: FrameNode[] = [];
+  
+  for (const node of selection) {
+    if (isFrame(node)) {
+      frames.push(node);
     }
   }
+  
+  if (frames.length === 0) return null;
+  
+  // Scan all selected frames
+  const frameDataList: FrameData[] = await Promise.all(
+    frames.map(async (frame, index) => {
+      const texts: string[] = [];
+      const componentNames: string[] = [];
 
+      const descendants = frame.findAll(() => true);
+      for (const d of descendants) {
+        if (d.type === 'TEXT') {
+          const t = (d as TextNode).characters?.trim();
+          if (t) texts.push(t);
+        }
+
+        if (d.type === 'INSTANCE') {
+          const inst = d as InstanceNode;
+          componentNames.push(inst.mainComponent?.name || inst.name);
+        }
+
+        if (d.type === 'COMPONENT') {
+          componentNames.push(d.name);
+        }
+      }
+
+      // Capture screenshot for PRD documentation
+      const screenshotBase64 = await exportNodeAsBase64(frame.id, 800);
+
+      return {
+        frameId: frame.id,
+        frameName: frame.name,
+        texts: uniq(texts).slice(0, 120),
+        componentNames: uniq(componentNames).slice(0, 120),
+        order: index,
+        screenshotBase64: screenshotBase64 || undefined,
+      };
+    })
+  );
+  
+  // For backward compatibility, also populate legacy fields with first frame
+  const firstFrame = frameDataList[0];
+  
   return {
-    frameId: node.id,
-    frameName: node.name,
-    texts: uniq(texts).slice(0, 120),
-    componentNames: uniq(componentNames).slice(0, 120),
+    frames: frameDataList,
+    frameId: firstFrame.frameId,
+    frameName: firstFrame.frameName,
+    texts: firstFrame.texts,
+    componentNames: firstFrame.componentNames,
   };
 }
 

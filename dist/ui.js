@@ -864,14 +864,96 @@ html, body {
 
 .md {
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.6;
+  color: var(--text);
 }
 
-.md h1, .md h2, .md h3 { margin: 0.6em 0 0.35em; }
-.md p { margin: 0.35em 0; }
-.md code { font-family: var(--mono); font-size: 11px; }
-.md pre { overflow: auto; padding: 10px; border-radius: 10px; border: 1px solid var(--border); }
-.md a { color: var(--primary); }
+.md h1 { 
+  font-size: 18px; 
+  font-weight: 700; 
+  margin: 1em 0 0.5em; 
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border);
+}
+.md h2 { 
+  font-size: 16px; 
+  font-weight: 700; 
+  margin: 0.8em 0 0.4em; 
+}
+.md h3 { 
+  font-size: 14px; 
+  font-weight: 600; 
+  margin: 0.6em 0 0.3em; 
+}
+.md h4 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0.5em 0 0.3em;
+}
+.md p { 
+  margin: 0.5em 0; 
+}
+.md ul, .md ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+.md li {
+  margin: 0.3em 0;
+}
+.md code { 
+  font-family: var(--mono); 
+  font-size: 11px;
+  background: rgba(var(--primary-rgb, 91, 140, 255), 0.1);
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+.md pre { 
+  overflow: auto; 
+  padding: 10px; 
+  border-radius: 8px; 
+  border: 1px solid var(--border);
+  background: var(--surface);
+  margin: 0.5em 0;
+}
+.md pre code {
+  background: none;
+  padding: 0;
+}
+.md a { 
+  color: var(--primary); 
+  text-decoration: none;
+}
+.md a:hover {
+  text-decoration: underline;
+}
+.md table {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  width: 100%;
+}
+.md th, .md td {
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  font-size: 11px;
+}
+.md th {
+  background: var(--surface);
+  font-weight: 600;
+}
+.md blockquote {
+  border-left: 3px solid var(--primary);
+  padding-left: 10px;
+  margin: 0.5em 0;
+  color: var(--subtext);
+}
+.md strong {
+  font-weight: 600;
+  color: var(--text);
+}
+.md em {
+  font-style: italic;
+  color: var(--subtext);
+}
 
 .notice {
   padding: 10px 12px;
@@ -1087,6 +1169,26 @@ html, body {
 .btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--subtext);
 }
 
 /* Loading Overlay */
@@ -5271,10 +5373,54 @@ function Markdown({ markdown }) {
     return (0,jsx_runtime.jsx)("div", { className: "md", dangerouslySetInnerHTML: { __html: html } });
 }
 function SettingsPanel({ settings, onChange, onSave, onClose, }) {
-    return ((0,jsx_runtime.jsx)("div", { className: "overlay", onClick: onClose, children: (0,jsx_runtime.jsxs)("div", { className: "modal", onClick: (e) => e.stopPropagation(), children: [(0,jsx_runtime.jsxs)("div", { className: "row", style: { justifyContent: 'space-between', marginBottom: 12 }, children: [(0,jsx_runtime.jsx)("div", { style: { fontWeight: 700, fontSize: 14 }, children: "Settings" }), (0,jsx_runtime.jsx)("button", { className: "iconBtn", onClick: onClose, title: "Close", children: "\u2715" })] }), (0,jsx_runtime.jsxs)("div", { style: { marginBottom: 12 }, children: [(0,jsx_runtime.jsx)("div", { className: "label", children: "OpenRouter API Key" }), (0,jsx_runtime.jsx)("input", { className: "input", type: "password", value: settings.openRouterApiKey, onChange: (e) => onChange(Object.assign(Object.assign({}, settings), { openRouterApiKey: e.target.value })), placeholder: "sk-or-..." }), (0,jsx_runtime.jsxs)("div", { className: "small", style: { marginTop: 6 }, children: ["\u83B7\u53D6\uFF1A", (0,jsx_runtime.jsx)("span", { className: "mono", children: "openrouter.ai/keys" })] })] }), (0,jsx_runtime.jsxs)("div", { style: { marginBottom: 12 }, children: [(0,jsx_runtime.jsx)("div", { className: "label", children: "Model" }), (0,jsx_runtime.jsxs)("select", { className: "select", value: settings.model, onChange: (e) => onChange(Object.assign(Object.assign({}, settings), { model: e.target.value })), children: [(0,jsx_runtime.jsxs)("optgroup", { label: "\uD83C\uDFA8 Recommended", children: [(0,jsx_runtime.jsx)("option", { value: "anthropic/claude-3.5-sonnet", children: "Claude 3.5 Sonnet" }), (0,jsx_runtime.jsx)("option", { value: "openai/gpt-4o", children: "GPT-4o" })] }), (0,jsx_runtime.jsxs)("optgroup", { label: "\u26A1 Gemini", children: [(0,jsx_runtime.jsx)("option", { value: "google/gemini-2.0-flash-001", children: "Gemini 2.0 Flash" }), (0,jsx_runtime.jsx)("option", { value: "google/gemini-2.5-pro-preview", children: "Gemini 2.5 Pro Preview" })] })] })] }), (0,jsx_runtime.jsxs)("div", { style: { marginBottom: 12 }, children: [(0,jsx_runtime.jsx)("div", { className: "label", children: "PRD KB Endpoint (optional)" }), (0,jsx_runtime.jsx)("input", { className: "input", value: settings.prdEndpointUrl || '', onChange: (e) => onChange(Object.assign(Object.assign({}, settings), { prdEndpointUrl: e.target.value || undefined })), placeholder: "https://.../prd.json" }), (0,jsx_runtime.jsx)("div", { className: "small", style: { marginTop: 6 }, children: "\u7559\u7A7A\u5219\u4F7F\u7528\u672C\u5730\u6A21\u62DF\u77E5\u8BC6\u5E93\u3002" })] }), (0,jsx_runtime.jsx)("div", { className: "hr" }), (0,jsx_runtime.jsx)("button", { className: "btn btnPrimary", style: { width: '100%' }, onClick: onSave, children: "Save Settings" })] }) }));
+    return ((0,jsx_runtime.jsx)("div", { className: "overlay", onClick: onClose, children: (0,jsx_runtime.jsxs)("div", { className: "modal", onClick: (e) => e.stopPropagation(), children: [(0,jsx_runtime.jsxs)("div", { className: "row", style: { justifyContent: 'space-between', marginBottom: 12 }, children: [(0,jsx_runtime.jsx)("div", { style: { fontWeight: 700, fontSize: 14 }, children: "Settings" }), (0,jsx_runtime.jsx)("button", { className: "iconBtn", onClick: onClose, title: "Close", children: "\u2715" })] }), (0,jsx_runtime.jsxs)("div", { style: { marginBottom: 12 }, children: [(0,jsx_runtime.jsx)("div", { className: "label", children: "OpenRouter API Key" }), (0,jsx_runtime.jsx)("input", { className: "input", type: "password", value: settings.openRouterApiKey, onChange: (e) => onChange(Object.assign(Object.assign({}, settings), { openRouterApiKey: e.target.value })), placeholder: "sk-or-..." }), (0,jsx_runtime.jsxs)("div", { className: "small", style: { marginTop: 6 }, children: ["\u83B7\u53D6\uFF1A", (0,jsx_runtime.jsx)("span", { className: "mono", children: "openrouter.ai/keys" })] })] }), (0,jsx_runtime.jsxs)("div", { style: { marginBottom: 12 }, children: [(0,jsx_runtime.jsx)("div", { className: "label", children: "Model" }), (0,jsx_runtime.jsxs)("select", { className: "select", value: settings.model, onChange: (e) => onChange(Object.assign(Object.assign({}, settings), { model: e.target.value })), children: [(0,jsx_runtime.jsxs)("optgroup", { label: "\uD83C\uDFA8 Recommended", children: [(0,jsx_runtime.jsx)("option", { value: "anthropic/claude-3.5-sonnet", children: "Claude 3.5 Sonnet" }), (0,jsx_runtime.jsx)("option", { value: "openai/gpt-4o", children: "GPT-4o" })] }), (0,jsx_runtime.jsxs)("optgroup", { label: "\u26A1 Gemini", children: [(0,jsx_runtime.jsx)("option", { value: "google/gemini-2.0-flash-001", children: "Gemini 2.0 Flash" }), (0,jsx_runtime.jsx)("option", { value: "google/gemini-2.5-pro-preview", children: "Gemini 2.5 Pro Preview" })] })] })] }), (0,jsx_runtime.jsxs)("div", { style: { marginBottom: 12 }, children: [(0,jsx_runtime.jsx)("div", { className: "label", children: "PRD KB Endpoint (optional)" }), (0,jsx_runtime.jsx)("input", { className: "input", value: settings.prdEndpointUrl || '', onChange: (e) => onChange(Object.assign(Object.assign({}, settings), { prdEndpointUrl: e.target.value || undefined })), placeholder: "https://.../prd.json" }), (0,jsx_runtime.jsx)("div", { className: "small", style: { marginTop: 6 }, children: "\u7559\u7A7A\u5219\u4F7F\u7528\u672C\u5730\u6A21\u62DF\u77E5\u8BC6\u5E93\u3002" })] }), (0,jsx_runtime.jsxs)("div", { style: { marginBottom: 12 }, children: [(0,jsx_runtime.jsx)("div", { className: "label", children: "Confluence Wiki URL (optional)" }), (0,jsx_runtime.jsx)("input", { className: "input", value: settings.confluenceWikiUrl || '', onChange: (e) => onChange(Object.assign(Object.assign({}, settings), { confluenceWikiUrl: e.target.value || undefined })), placeholder: "https://your-company.atlassian.net/wiki/spaces/..." }), (0,jsx_runtime.jsx)("div", { className: "small", style: { marginTop: 6 }, children: "\u586B\u5199\u540E\u53EF\u81EA\u52A8\u540C\u6B65PRD\u5230Wiki\uFF08\u9700\u914D\u7F6EAtlassian MCP\uFF09" })] }), (0,jsx_runtime.jsx)("div", { className: "hr" }), (0,jsx_runtime.jsx)("button", { className: "btn btnPrimary", style: { width: '100%' }, onClick: onSave, children: "Save Settings" })] }) }));
 }
 function PRDSyncView({ context, result, autoSync, onToggleAutoSync, }) {
-    return ((0,jsx_runtime.jsxs)("div", { className: "content", children: [(0,jsx_runtime.jsxs)("div", { className: "card", style: { marginBottom: 12 }, children: [(0,jsx_runtime.jsxs)("div", { className: "row", style: { justifyContent: 'space-between' }, children: [(0,jsx_runtime.jsxs)("div", { children: [(0,jsx_runtime.jsx)("div", { className: "label", children: "Selected Frame" }), (0,jsx_runtime.jsx)("div", { style: { fontSize: 12, fontWeight: 600 }, children: context ? context.frameName : 'None' }), context && ((0,jsx_runtime.jsxs)("div", { className: "small", style: { marginTop: 6 }, children: ["Text nodes: ", (0,jsx_runtime.jsx)("span", { className: "mono", children: context.texts.length }), " \u00B7 Components:", ' ', (0,jsx_runtime.jsx)("span", { className: "mono", children: context.componentNames.length })] }))] }), (0,jsx_runtime.jsxs)("label", { className: "toggle", children: [(0,jsx_runtime.jsx)("input", { type: "checkbox", checked: autoSync, onChange: (e) => onToggleAutoSync(e.target.checked) }), "Auto-Sync"] })] }), (0,jsx_runtime.jsx)("div", { className: "hr" }), (0,jsx_runtime.jsx)("div", { className: "row", children: (0,jsx_runtime.jsx)("button", { className: "btn btnPrimary", onClick: () => postMessage({ type: 'SYNC_PRD_NOW' }), children: "Sync PRD" }) })] }), (0,jsx_runtime.jsxs)("div", { className: "card", children: [(0,jsx_runtime.jsx)("div", { className: "label", children: "PRD Output" }), (0,jsx_runtime.jsx)("div", { className: "hr" }), result ? ((0,jsx_runtime.jsxs)(jsx_runtime.Fragment, { children: [(0,jsx_runtime.jsx)("div", { style: { fontWeight: 700, marginBottom: 8 }, children: result.featureName }), (0,jsx_runtime.jsx)(Markdown, { markdown: result.markdown }), result.matchedSections.length > 0 && ((0,jsx_runtime.jsxs)("div", { className: "small", style: { marginTop: 10 }, children: ["Matched: ", result.matchedSections.join(', ')] }))] })) : ((0,jsx_runtime.jsx)("div", { className: "small", children: "\u9009\u62E9\u4E00\u4E2A Frame\uFF0C\u7136\u540E\u70B9\u51FB Sync PRD\u3002" }))] })] }));
+    var _a, _b;
+    const [additionalPrompt, setAdditionalPrompt] = react.useState('');
+    const frameCount = (context === null || context === void 0 ? void 0 : context.frames) ? context.frames.length : (context ? 1 : 0);
+    const isMultiFrame = frameCount > 1;
+    return ((0,jsx_runtime.jsxs)("div", { className: "content", children: [(0,jsx_runtime.jsxs)("div", { className: "card", style: { marginBottom: 12 }, children: [(0,jsx_runtime.jsx)("div", { className: "label", style: { marginBottom: 8 }, children: isMultiFrame ? `Selected Frames (${frameCount})` : 'Selected Frame' }), isMultiFrame && (context === null || context === void 0 ? void 0 : context.frames) ? ((0,jsx_runtime.jsxs)("div", { children: [(0,jsx_runtime.jsxs)("div", { style: { fontSize: 12, fontWeight: 600, marginBottom: 4 }, children: [context.frames[0].frameName, " \u2192 ... \u2192 ", context.frames[frameCount - 1].frameName] }), (0,jsx_runtime.jsxs)("div", { className: "small", children: ["\u5B8C\u6574\u4EA7\u54C1\u6D41\u7A0B\uFF08", frameCount, " \u4E2A\u5C4F\u5E55\uFF09"] })] })) : ((0,jsx_runtime.jsxs)("div", { children: [(0,jsx_runtime.jsx)("div", { style: { fontSize: 12, fontWeight: 600 }, children: context ? context.frameName : 'None' }), context && ((0,jsx_runtime.jsxs)("div", { className: "small", style: { marginTop: 6 }, children: ["Text nodes: ", (0,jsx_runtime.jsx)("span", { className: "mono", children: ((_a = context.texts) === null || _a === void 0 ? void 0 : _a.length) || 0 }), " \u00B7 Components:", ' ', (0,jsx_runtime.jsx)("span", { className: "mono", children: ((_b = context.componentNames) === null || _b === void 0 ? void 0 : _b.length) || 0 })] }))] }))] }), (0,jsx_runtime.jsxs)("div", { className: "card", children: [(0,jsx_runtime.jsx)("div", { className: "label", style: { marginBottom: 8 }, children: "PRD Output" }), (0,jsx_runtime.jsx)("div", { className: "hr" }), result ? ((0,jsx_runtime.jsxs)(jsx_runtime.Fragment, { children: [(0,jsx_runtime.jsxs)("div", { style: {
+                                    maxHeight: '400px',
+                                    overflowY: 'auto',
+                                    paddingRight: '4px',
+                                    marginBottom: 12
+                                }, children: [(0,jsx_runtime.jsx)("div", { style: { fontWeight: 700, marginBottom: 8 }, children: result.featureName }), (0,jsx_runtime.jsx)(Markdown, { markdown: result.markdown }), result.matchedSections.length > 0 && ((0,jsx_runtime.jsxs)("div", { className: "small", style: { marginTop: 10 }, children: ["Matched: ", result.matchedSections.join(', ')] }))] }), (0,jsx_runtime.jsx)("div", { className: "hr" }), (0,jsx_runtime.jsxs)("div", { style: { marginTop: 12 }, children: [(0,jsx_runtime.jsx)("div", { className: "small", style: { marginBottom: 6 }, children: "\u8865\u5145\u63D0\u793A\uFF08\u53EF\u9009\uFF09\uFF1A" }), (0,jsx_runtime.jsx)("textarea", { className: "input", placeholder: "\u4F8B\u5982\uFF1A\u91CD\u70B9\u5173\u6CE8\u98CE\u9669\u63D0\u793A\u76F8\u5173\u7684\u57CB\u70B9", value: additionalPrompt, onChange: (e) => setAdditionalPrompt(e.target.value), rows: 2, style: {
+                                            width: '100%',
+                                            marginBottom: 8,
+                                            resize: 'vertical',
+                                            fontFamily: 'inherit',
+                                            fontSize: '12px'
+                                        } }), (0,jsx_runtime.jsxs)("div", { className: "row", style: { gap: 8 }, children: [(0,jsx_runtime.jsx)("button", { className: "btn btnPrimary", onClick: () => postMessage({
+                                                    type: 'SYNC_PRD_NOW',
+                                                    additionalPrompt: additionalPrompt || undefined
+                                                }), children: "\uD83D\uDD04 \u91CD\u65B0\u751F\u6210 PRD" }), (0,jsx_runtime.jsx)("button", { className: "btn", onClick: () => {
+                                                    const textarea = document.createElement('textarea');
+                                                    textarea.value = result.markdown;
+                                                    textarea.style.position = 'fixed';
+                                                    textarea.style.opacity = '0';
+                                                    document.body.appendChild(textarea);
+                                                    textarea.select();
+                                                    try {
+                                                        document.execCommand('copy');
+                                                        alert(`✓ PRD已复制到剪贴板\n\n文档长度: ${result.markdown.length} 字符`);
+                                                    }
+                                                    catch (err) {
+                                                        alert('复制失败，请手动选择文本复制');
+                                                    }
+                                                    document.body.removeChild(textarea);
+                                                }, title: "\u590D\u5236 PRD \u5230\u526A\u8D34\u677F", children: "\uD83D\uDCCB \u590D\u5236" })] })] })] })) : ((0,jsx_runtime.jsxs)(jsx_runtime.Fragment, { children: [(0,jsx_runtime.jsx)("div", { className: "small", style: { marginBottom: 12 }, children: isMultiFrame
+                                    ? '选择多个 Frame（按住 Shift/Cmd 多选），然后点击下方按钮生成 PRD。'
+                                    : '选择一个 Frame，然后点击下方按钮生成 PRD。' }), (0,jsx_runtime.jsx)("div", { className: "hr" }), (0,jsx_runtime.jsxs)("div", { style: { marginTop: 12 }, children: [(0,jsx_runtime.jsx)("div", { className: "small", style: { marginBottom: 6 }, children: "\u8865\u5145\u63D0\u793A\uFF08\u53EF\u9009\uFF09\uFF1A" }), (0,jsx_runtime.jsx)("textarea", { className: "input", placeholder: "\u4F8B\u5982\uFF1A\u91CD\u70B9\u5173\u6CE8\u98CE\u9669\u63D0\u793A\u76F8\u5173\u7684\u57CB\u70B9", value: additionalPrompt, onChange: (e) => setAdditionalPrompt(e.target.value), rows: 2, style: {
+                                            width: '100%',
+                                            marginBottom: 8,
+                                            resize: 'vertical',
+                                            fontFamily: 'inherit',
+                                            fontSize: '12px'
+                                        } }), (0,jsx_runtime.jsx)("div", { className: "row", style: { gap: 8 }, children: (0,jsx_runtime.jsx)("button", { className: "btn btnPrimary", onClick: () => postMessage({
+                                                type: 'SYNC_PRD_NOW',
+                                                additionalPrompt: additionalPrompt || undefined
+                                            }), children: isMultiFrame ? '📝 生成产品流程 PRD' : '📝 生成 PRD' }) })] })] }))] })] }));
 }
 function EventCard({ event }) {
     const [expanded, setExpanded] = (0,react.useState)(false);

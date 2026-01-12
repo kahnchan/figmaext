@@ -4,13 +4,25 @@ export interface Settings {
   openRouterApiKey: string;
   model: string;
   prdEndpointUrl?: string; // optional external KB endpoint
+  confluenceWikiUrl?: string; // Wiki page URL for PRD updates
 }
 
-export interface ScanContext {
+export interface FrameData {
   frameId: string;
   frameName: string;
   componentNames: string[];
   texts: string[];
+  order: number; // Frame order in the flow
+  screenshotBase64?: string; // Base64 encoded PNG screenshot
+}
+
+export interface ScanContext {
+  frames: FrameData[]; // Support multiple frames
+  // Legacy single frame support (for backward compatibility)
+  frameId?: string;
+  frameName?: string;
+  componentNames?: string[];
+  texts?: string[];
 }
 
 export interface PRDSection {
@@ -56,7 +68,7 @@ export type UIToPluginMessage =
   | { type: 'SET_SETTINGS'; settings: Settings }
   | { type: 'SET_AUTOSYNC'; enabled: boolean }
   | { type: 'SET_MODE'; mode: Mode }
-  | { type: 'SYNC_PRD_NOW' }
+  | { type: 'SYNC_PRD_NOW'; additionalPrompt?: string }
   | { type: 'GENERATE_TRACKING_NOW' }
   | { type: 'SCAN_PAGE_FOR_TRACKING' }  // 新增：扫描整个页面
   | { type: 'UPDATE_TRACKING_EVENT'; event: TrackingEvent }

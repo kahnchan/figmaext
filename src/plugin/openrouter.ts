@@ -33,8 +33,8 @@ export async function openRouterChat(settings: Settings, messages: ChatMessage[]
     body: JSON.stringify({
       model: settings.model || 'anthropic/claude-3.5-sonnet',
       messages,
-      temperature: 0.2,
-      max_tokens: 2000,
+      temperature: 0.3,
+      max_tokens: 8000, // 增加到8000以支持详细的PRD文档
     }),
   });
 

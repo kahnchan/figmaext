@@ -112,6 +112,19 @@ function SettingsPanel({
           </div>
         </div>
 
+        <div style={{ marginBottom: 12 }}>
+          <div className="label">Confluence Wiki URL (optional)</div>
+          <input
+            className="input"
+            value={settings.confluenceWikiUrl || ''}
+            onChange={(e) => onChange({ ...settings, confluenceWikiUrl: e.target.value || undefined })}
+            placeholder="https://your-company.atlassian.net/wiki/spaces/..."
+          />
+          <div className="small" style={{ marginTop: 6 }}>
+            填写后可自动同步PRD到Wiki（需配置Atlassian MCP）
+          </div>
+        </div>
+
         <div className="hr" />
 
         <button className="btn btnPrimary" style={{ width: '100%' }} onClick={onSave}>
@@ -133,54 +146,156 @@ function PRDSyncView({
   autoSync: boolean;
   onToggleAutoSync: (v: boolean) => void;
 }) {
+  const [additionalPrompt, setAdditionalPrompt] = React.useState('');
+  const frameCount = context?.frames ? context.frames.length : (context ? 1 : 0);
+  const isMultiFrame = frameCount > 1;
+
   return (
     <div className="content">
       <div className="card" style={{ marginBottom: 12 }}>
-        <div className="row" style={{ justifyContent: 'space-between' }}>
+        <div className="label" style={{ marginBottom: 8 }}>
+          {isMultiFrame ? `Selected Frames (${frameCount})` : 'Selected Frame'}
+        </div>
+        
+        {isMultiFrame && context?.frames ? (
           <div>
-            <div className="label">Selected Frame</div>
-            <div style={{ fontSize: 12, fontWeight: 600 }}>{context ? context.frameName : 'None'}</div>
+            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+              {context.frames[0].frameName} → ... → {context.frames[frameCount - 1].frameName}
+            </div>
+            <div className="small">
+              完整产品流程（{frameCount} 个屏幕）
+            </div>
+          </div>
+        ) : (
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600 }}>
+              {context ? context.frameName : 'None'}
+            </div>
             {context && (
               <div className="small" style={{ marginTop: 6 }}>
-                Text nodes: <span className="mono">{context.texts.length}</span> · Components:{' '}
-                <span className="mono">{context.componentNames.length}</span>
+                Text nodes: <span className="mono">{context.texts?.length || 0}</span> · Components:{' '}
+                <span className="mono">{context.componentNames?.length || 0}</span>
               </div>
             )}
           </div>
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={autoSync}
-              onChange={(e) => onToggleAutoSync(e.target.checked)}
-            />
-            Auto-Sync
-          </label>
-        </div>
+        )}
 
-        <div className="hr" />
-
-        <div className="row">
-          <button className="btn btnPrimary" onClick={() => postMessage({ type: 'SYNC_PRD_NOW' })}>
-            Sync PRD
-          </button>
-        </div>
       </div>
 
       <div className="card">
-        <div className="label">PRD Output</div>
+        <div className="label" style={{ marginBottom: 8 }}>PRD Output</div>
         <div className="hr" />
+        
         {result ? (
           <>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>{result.featureName}</div>
-            <Markdown markdown={result.markdown} />
-            {result.matchedSections.length > 0 && (
-              <div className="small" style={{ marginTop: 10 }}>
-                Matched: {result.matchedSections.join(', ')}
+            <div style={{ 
+              maxHeight: '400px', 
+              overflowY: 'auto',
+              paddingRight: '4px',
+              marginBottom: 12
+            }}>
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>{result.featureName}</div>
+              <Markdown markdown={result.markdown} />
+              {result.matchedSections.length > 0 && (
+                <div className="small" style={{ marginTop: 10 }}>
+                  Matched: {result.matchedSections.join(', ')}
+                </div>
+              )}
+            </div>
+            
+            <div className="hr" />
+            
+            <div style={{ marginTop: 12 }}>
+              <div className="small" style={{ marginBottom: 6 }}>补充提示（可选）：</div>
+              <textarea 
+                className="input" 
+                placeholder="例如：重点关注风险提示相关的埋点"
+                value={additionalPrompt}
+                onChange={(e) => setAdditionalPrompt(e.target.value)}
+                rows={2}
+                style={{ 
+                  width: '100%', 
+                  marginBottom: 8,
+                  resize: 'vertical',
+                  fontFamily: 'inherit',
+                  fontSize: '12px'
+                }}
+              />
+              
+              <div className="row" style={{ gap: 8 }}>
+                <button 
+                  className="btn btnPrimary" 
+                  onClick={() => postMessage({ 
+                    type: 'SYNC_PRD_NOW',
+                    additionalPrompt: additionalPrompt || undefined
+                  })}
+                >
+                  🔄 重新生成 PRD
+                </button>
+                <button 
+                  className="btn" 
+                  onClick={() => {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = result.markdown;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                      document.execCommand('copy');
+                      alert(`✓ PRD已复制到剪贴板\n\n文档长度: ${result.markdown.length} 字符`);
+                    } catch (err) {
+                      alert('复制失败，请手动选择文本复制');
+                    }
+                    document.body.removeChild(textarea);
+                  }}
+                  title="复制 PRD 到剪贴板"
+                >
+                  📋 复制
+                </button>
               </div>
-            )}
+            </div>
           </>
         ) : (
-          <div className="small">选择一个 Frame，然后点击 Sync PRD。</div>
+          <>
+            <div className="small" style={{ marginBottom: 12 }}>
+              {isMultiFrame 
+                ? '选择多个 Frame（按住 Shift/Cmd 多选），然后点击下方按钮生成 PRD。'
+                : '选择一个 Frame，然后点击下方按钮生成 PRD。'}
+            </div>
+            
+            <div className="hr" />
+            
+            <div style={{ marginTop: 12 }}>
+              <div className="small" style={{ marginBottom: 6 }}>补充提示（可选）：</div>
+              <textarea 
+                className="input" 
+                placeholder="例如：重点关注风险提示相关的埋点"
+                value={additionalPrompt}
+                onChange={(e) => setAdditionalPrompt(e.target.value)}
+                rows={2}
+                style={{ 
+                  width: '100%', 
+                  marginBottom: 8,
+                  resize: 'vertical',
+                  fontFamily: 'inherit',
+                  fontSize: '12px'
+                }}
+              />
+              
+              <div className="row" style={{ gap: 8 }}>
+                <button 
+                  className="btn btnPrimary" 
+                  onClick={() => postMessage({ 
+                    type: 'SYNC_PRD_NOW',
+                    additionalPrompt: additionalPrompt || undefined
+                  })}
+                >
+                  {isMultiFrame ? '📝 生成产品流程 PRD' : '📝 生成 PRD'}
+                </button>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>

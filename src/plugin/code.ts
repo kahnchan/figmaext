@@ -1,9 +1,10 @@
 /// <reference types="@figma/plugin-typings" />
 
-import type { Mode, PluginToUIMessage, Settings, TrackingEvent, UIToPluginMessage } from '@shared/messages';
+import type { Mode, PluginToUIMessage, Settings, TrackingEvent, UIToPluginMessage, ScanContext } from '@shared/messages';
 import { scanSelectedFrame, scanSelectedInteractiveNodes, exportNodeAsBase64, getRootFrame, scanFrameForInteractiveElements } from './scan';
 import { syncPRD } from './prd';
 import { attachTrackingToLayer, generateTrackingForNode, readTrackingFromLayer, analyzePageWithVision, type ElementHint } from './tracker';
+import { fetchConfluencePage, compareAndMergePRD, syncToConfluence } from './confluence';
 
 const STORAGE_SETTINGS = 'onekey_settings';
 const STORAGE_AUTOSYNC = 'onekey_autosync';
@@ -39,12 +40,22 @@ async function saveTrackingEvents() {
   post({ type: 'TRACKING_EVENTS', events: trackingEvents });
 }
 
-function makeContextKey(ctx: { frameId: string; texts: string[]; componentNames: string[] }): string {
-  return `${ctx.frameId}:${ctx.texts.join('|').slice(0, 500)}:${ctx.componentNames.join('|').slice(0, 500)}`;
+function makeContextKey(ctx: ScanContext): string {
+  if (ctx.frames && ctx.frames.length > 0) {
+    // Multi-frame: use all frame IDs
+    const frameIds = ctx.frames.map((f) => f.frameId).join(',');
+    const allTexts: string[] = [];
+    for (const frame of ctx.frames) {
+      allTexts.push(...frame.texts);
+    }
+    return `${frameIds}:${allTexts.join('|').slice(0, 500)}`;
+  }
+  // Legacy single frame
+  return `${ctx.frameId}:${ctx.texts?.join('|').slice(0, 500)}:${ctx.componentNames?.join('|').slice(0, 500)}`;
 }
 
 async function pushScanContext() {
-  const ctx = scanSelectedFrame();
+  const ctx = await scanSelectedFrame();
   post({ type: 'SCAN_CONTEXT', context: ctx });
 
   if (!ctx) return;
@@ -54,12 +65,12 @@ async function pushScanContext() {
   lastContextKey = key;
 
   if (autoSync && mode === 'prd') {
-    await doSyncPRD(ctx);
+    await doSyncPRD(undefined, ctx);
   }
 }
 
-async function doSyncPRD(ctx?: ReturnType<typeof scanSelectedFrame>) {
-  const context = ctx || scanSelectedFrame();
+async function doSyncPRD(additionalPrompt?: string, ctx?: Awaited<ReturnType<typeof scanSelectedFrame>>) {
+  const context = ctx || await scanSelectedFrame();
   if (!context) {
     post({ type: 'PRD_RESULT', result: null });
     return;
@@ -75,7 +86,47 @@ async function doSyncPRD(ctx?: ReturnType<typeof scanSelectedFrame>) {
       } 
     });
     
-    const result = await syncPRD(settings, context);
+    // Generate new PRD
+    let result = await syncPRD(settings, context, additionalPrompt);
+    
+    // If Confluence URL is configured, try to merge with existing content
+    if (settings.confluenceWikiUrl) {
+      post({ 
+        type: 'LOADING_STATUS', 
+        status: { 
+          isLoading: true, 
+          message: '正在从 Confluence 获取现有文档...'
+        } 
+      });
+      
+      const existingPage = await fetchConfluencePage(settings.confluenceWikiUrl);
+      
+      if (existingPage) {
+        post({ 
+          type: 'LOADING_STATUS', 
+          status: { 
+            isLoading: true, 
+            message: '正在合并文档内容...'
+          } 
+        });
+        
+        const merged = await compareAndMergePRD(settings, result, existingPage);
+        
+        // Update result with merged content
+        result = {
+          ...result,
+          markdown: merged.mergedMarkdown,
+        };
+        
+        figma.notify(`✓ 已与现有文档合并 (${merged.changes.length} 处变更)`);
+      }
+      
+      // Optionally sync to Confluence (currently placeholder)
+      // const syncResult = await syncToConfluence(settings.confluenceWikiUrl, result.markdown, result.featureName);
+      // if (syncResult.success) {
+      //   figma.notify('✓ 已同步到 Confluence');
+      // }
+    }
     
     // Hide loading
     post({ type: 'LOADING_STATUS', status: { isLoading: false } });
@@ -412,7 +463,7 @@ figma.ui.onmessage = async (msg: UIToPluginMessage) => {
     }
 
     if (msg.type === 'SYNC_PRD_NOW') {
-      await doSyncPRD();
+      await doSyncPRD(msg.additionalPrompt);
       return;
     }
 

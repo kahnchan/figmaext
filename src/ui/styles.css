@@ -167,14 +167,96 @@ html, body {
 
 .md {
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.6;
+  color: var(--text);
 }
 
-.md h1, .md h2, .md h3 { margin: 0.6em 0 0.35em; }
-.md p { margin: 0.35em 0; }
-.md code { font-family: var(--mono); font-size: 11px; }
-.md pre { overflow: auto; padding: 10px; border-radius: 10px; border: 1px solid var(--border); }
-.md a { color: var(--primary); }
+.md h1 { 
+  font-size: 18px; 
+  font-weight: 700; 
+  margin: 1em 0 0.5em; 
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border);
+}
+.md h2 { 
+  font-size: 16px; 
+  font-weight: 700; 
+  margin: 0.8em 0 0.4em; 
+}
+.md h3 { 
+  font-size: 14px; 
+  font-weight: 600; 
+  margin: 0.6em 0 0.3em; 
+}
+.md h4 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0.5em 0 0.3em;
+}
+.md p { 
+  margin: 0.5em 0; 
+}
+.md ul, .md ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+.md li {
+  margin: 0.3em 0;
+}
+.md code { 
+  font-family: var(--mono); 
+  font-size: 11px;
+  background: rgba(var(--primary-rgb, 91, 140, 255), 0.1);
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+.md pre { 
+  overflow: auto; 
+  padding: 10px; 
+  border-radius: 8px; 
+  border: 1px solid var(--border);
+  background: var(--surface);
+  margin: 0.5em 0;
+}
+.md pre code {
+  background: none;
+  padding: 0;
+}
+.md a { 
+  color: var(--primary); 
+  text-decoration: none;
+}
+.md a:hover {
+  text-decoration: underline;
+}
+.md table {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  width: 100%;
+}
+.md th, .md td {
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  font-size: 11px;
+}
+.md th {
+  background: var(--surface);
+  font-weight: 600;
+}
+.md blockquote {
+  border-left: 3px solid var(--primary);
+  padding-left: 10px;
+  margin: 0.5em 0;
+  color: var(--subtext);
+}
+.md strong {
+  font-weight: 600;
+  color: var(--text);
+}
+.md em {
+  font-style: italic;
+  color: var(--subtext);
+}
 
 .notice {
   padding: 10px 12px;
@@ -390,6 +472,26 @@ html, body {
 .btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--subtext);
 }
 
 /* Loading Overlay */
