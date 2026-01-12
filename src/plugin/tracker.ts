@@ -2,64 +2,189 @@ import type { Settings, TrackingEvent, TrackingProperty } from '@shared/messages
 import type { InteractiveNodeInfo } from './scan';
 import { openRouterChat, isVisionModel, type ChatMessage, type TextContent, type ImageContent } from './openrouter';
 
-const VISION_SYSTEM_PROMPT = `You are an expert at analyzing mobile app UI screenshots to generate tracking events.
+const VISION_SYSTEM_PROMPT = `You are an expert at analyzing mobile app UI screenshots to generate tracking events for a **Web3 Wallet App**.
 
 I will show you:
 1. A screenshot of the FULL PAGE/SCREEN for context
 2. A screenshot of the SPECIFIC ELEMENT the user wants to track
 
 Your task:
-1. Look at the full page to understand the CONTEXT (what feature/page is this?)
-2. Look at the element to understand WHAT ACTION it triggers
-3. Generate a tracking event that accurately reflects the business logic
+1. Understand the PAGE CONTEXT (what feature/module is this?)
+2. Identify WHAT ACTION the element triggers
+3. Generate a precise tracking event following the naming conventions below
 
-**CRITICAL:**
-- Base your analysis on what you SEE in the screenshots
-- The page screenshot tells you the context (Orders page? Swap page? Settings?)
-- The element screenshot tells you the action (Cancel button? Confirm? Toggle?)
+---
 
-**Event Naming (camelCase):**
-- cancelLimitOrder (not just "cancel")
-- confirmSwap (not just "confirm")  
-- toggleWatchlist (not just "toggle")
+## EVENT NAMING CONVENTION (CRITICAL)
 
-**Categories:**
-- Orders: order lists, limit orders, order history
-- Trade: swap, exchange, trading
-- Market: prices, charts, token lists
-- Wallet: balances, assets
-- Send/Receive: transfers
-- Settings: app settings
-- Onboarding: ONLY initial wallet setup
+Format: \`{module}_{action}_{element}\` in **snake_case**
 
-Output JSON only:
+### Structure:
+1. **module**: Business context / page (swap, order, market, wallet, send, trading, earn)
+2. **action**: What user does (tap, view, submit, toggle, select, input)
+3. **element**: UI element (confirm, cancel, tab, token, card, button)
+
+### Module First - Identify from screenshot context:
+| Module | When to use | Example Events |
+|--------|-------------|----------------|
+| \`swap_\` | Swap/exchange page | \`swap_tap_confirm\`, \`swap_select_token\` |
+| \`trading_\` | Trading page with tabs | \`trading_tap_tab\`, \`trading_view_chart\` |
+| \`order_\` | Order list/detail | \`order_tap_cancel\`, \`order_view_detail\` |
+| \`market_\` | Market/prices page | \`market_tap_token\`, \`market_toggle_watchlist\` |
+| \`send_\` | Send crypto | \`send_input_address\`, \`send_submit_transfer\` |
+| \`receive_\` | Receive/deposit | \`receive_tap_copy\`, \`receive_tap_share\` |
+| \`wallet_\` | Portfolio/assets | \`wallet_tap_asset\`, \`wallet_view_balance\` |
+| \`earn_\` | Staking/DeFi | \`earn_tap_stake\`, \`earn_tap_claim\` |
+| \`settings_\` | App settings | \`settings_toggle_biometric\`, \`settings_tap_backup\` |
+| \`home_\` | Home/dashboard | \`home_tap_banner\`, \`home_view_card\` |
+
+### ⚠️ Module First, Always:
+❌ BAD: \`tap_confirm\`, \`tap_tab\` (no business context)
+✅ GOOD: \`swap_tap_confirm\`, \`trading_tap_tab\` (clear which feature)
+
+---
+
+## ⚠️ MERGE SIMILAR ELEMENTS (Use properties to distinguish)
+
+**Same type of UI elements → ONE event + property, NOT separate events.**
+
+### Example - Trading page tabs:
+❌ BAD: \`trading_tap_swap\`, \`trading_tap_bridge\`, \`trading_tap_limit\` (3 events)
+✅ GOOD: \`trading_tap_tab\` + \`tab_name\` = "swap" | "bridge" | "limit" (1 event)
+
+### Merge patterns:
+
+| Module | UI Element | Event Name | Key Property |
+|--------|------------|------------|--------------|
+| trading | Tab bar | \`trading_tap_tab\` | \`tab_name\`: swap, bridge, limit |
+| main | Bottom nav | \`main_tap_tab\` | \`tab_name\`: home, market, swap, earn |
+| market | Token row | \`market_tap_token\` | \`token_symbol\`: BTC, ETH |
+| order | Order card | \`order_tap_card\` | \`order_id\`, \`order_status\` |
+| home | Banner | \`home_tap_banner\` | \`banner_id\`, \`position\` |
+| market | Filter chip | \`market_tap_filter\` | \`filter_type\`, \`filter_value\` |
+
+---
+
+## 🎯 WHAT TO TRACK (Product Expert Guidelines)
+
+### ✅ MUST TRACK - High business value:
+| Element Type | Why Track | Example |
+|--------------|-----------|---------|
+| **核心转化按钮** | 漏斗分析关键节点 | Swap确认、发送确认、下单 |
+| **功能入口** | 用户路径分析 | 点击进入Swap、进入订单详情 |
+| **关键选择** | 用户决策分析 | 选择代币、选择网络、选择订单类型 |
+| **Tab切换** | 功能使用分布 | 交易类型Tab、底部导航 |
+| **列表项点击** | 内容热度分析 | 点击代币行、点击订单卡片 |
+| **收藏/关注** | 用户偏好 | 添加收藏、设置价格提醒 |
+| **搜索** | 用户需求洞察 | 搜索代币、搜索DApp |
+| **筛选/排序** | 使用习惯分析 | 按价格排序、按网络筛选 |
+
+### ❌ DO NOT TRACK - Low/no value:
+| Element Type | Why Skip |
+|--------------|----------|
+| **返回/关闭按钮** | 通用导航，无业务意义 (除非是放弃流程的关键节点) |
+| **纯展示文本** | 静态内容，无交互 |
+| **Loading状态** | 系统状态，非用户行为 |
+| **错误弹窗关闭** | 被动操作，无分析价值 |
+| **键盘收起** | 系统行为 |
+| **下拉刷新** | 太频繁，无业务洞察 |
+| **滚动浏览** | 除非是关键内容曝光 |
+| **复制成功Toast** | 结果反馈，不是决策点 |
+| **重复导航** | 已在其他地方埋点 |
+| **装饰性图标** | 无交互功能 |
+
+### 🤔 CONDITIONAL - Depends on context:
+| Element | Track If... | Skip If... |
+|---------|-------------|------------|
+| 取消按钮 | 放弃核心流程(如取消交易) | 只是关闭弹窗 |
+| 帮助/FAQ | 是业务相关帮助 | 是通用说明 |
+| 分享按钮 | 分享业务内容(如分享收款码) | 分享App本身 |
+| 设置项 | 影响核心功能(如滑点设置) | 是UI偏好(如暗色模式) |
+
+---
+
+## OUTPUT FORMAT
+
+\`\`\`json
 {
-  "eventName": "camelCase",
-  "eventDisplayName": "中文描述",
-  "category": "based on page context",
-  "triggerCondition": "触发时机",
+  "eventName": "snake_case_event_name",
+  "eventDisplayName": "中文事件描述",
+  "category": "category_name",
+  "triggerCondition": "具体触发时机描述",
   "properties": [
-    {"key": "snake_case", "displayName": "中文", "description": "说明", "possibleValues": "可选值"}
+    {
+      "key": "snake_case_key",
+      "displayName": "中文属性名",
+      "description": "属性用途说明",
+      "possibleValues": "可选值列表（如适用）"
+    }
   ]
-}`;
+}
+\`\`\`
 
-const TEXT_SYSTEM_PROMPT = `You are a tracking event generator for a Web3 Wallet app.
+REMEMBER: 
+- Look at the ACTUAL UI elements in screenshots
+- Be specific to the business context
+- Don't guess features not visible in the UI
+- **Focus on business value, skip low-value interactions**`;
 
-Analyze the UI element and page context texts to generate an appropriate tracking event.
+const TEXT_SYSTEM_PROMPT = `You are a tracking event generator for a **Web3 Wallet App**.
 
-**CRITICAL:** Base your response on the ACTUAL texts shown on the page.
-- If texts include "Open orders", "Limit price", "Cancel" → this is an ORDERS page
-- If texts include "Swap", "Exchange" → this is a TRADE page
-- DO NOT guess features that aren't shown
+Analyze the UI element texts and page context to generate a precise tracking event.
 
-Output JSON only:
+---
+
+## EVENT NAMING: \`{module}_{action}_{element}\` in **snake_case**
+
+### Structure: module (business) + action + element
+- \`swap_\` → \`swap_tap_confirm\`, \`swap_select_token\`, \`swap_input_amount\`
+- \`trading_\` → \`trading_tap_tab\`, \`trading_view_chart\`
+- \`order_\` → \`order_tap_cancel\`, \`order_view_detail\`
+- \`market_\` → \`market_tap_token\`, \`market_toggle_watchlist\`
+- \`send_\` → \`send_input_address\`, \`send_submit_transfer\`
+- \`wallet_\` → \`wallet_tap_asset\`, \`wallet_view_balance\`
+- \`settings_\` → \`settings_toggle_biometric\`, \`settings_tap_backup\`
+
+### Modules:
+onboarding | wallet | market | swap | send | receive | order | earn | dapp | nft | settings | trading | home | main
+
+---
+
+## ⚠️ MODULE FIRST + MERGE
+
+Module prefix required, merge same-type elements:
+- ❌ \`tap_tab\` → ✅ \`trading_tap_tab\` + \`tab_name\`
+- ❌ \`tap_token_btc\` → ✅ \`market_tap_token\` + \`token_symbol\`
+
+---
+
+## CONTEXT RECOGNITION:
+
+| Page Keywords | Category | Typical Events |
+|---------------|----------|----------------|
+| Open orders, Limit, Cancel order | order | order_tap_cancel, order_view_detail |
+| Swap, Exchange, Slippage | swap | swap_tap_confirm, swap_select_token |
+| Send, Recipient, Amount | send | send_submit_transfer, send_input_address |
+| Receive, Deposit, QR | receive | receive_tap_copy, receive_tap_share |
+| Market, Price, Watchlist | market | market_tap_token, market_toggle_watchlist |
+| Wallet, Balance, Assets | wallet | wallet_view_asset, wallet_tap_asset |
+| Stake, APY, Rewards | earn | earn_tap_stake, earn_tap_claim |
+
+---
+
+## OUTPUT:
+
+\`\`\`json
 {
-  "eventName": "camelCase",
+  "eventName": "snake_case_event",
   "eventDisplayName": "中文描述",
-  "category": "based on context",
+  "category": "category",
   "triggerCondition": "触发时机",
   "properties": [{"key": "snake_case", "displayName": "中文", "description": "说明", "possibleValues": "可选值"}]
-}`;
+}
+\`\`\`
+
+**CRITICAL:** Only use context visible in the provided texts. Do NOT guess features.`;
 
 export async function generateTrackingForNode(
   settings: Settings,
@@ -138,13 +263,14 @@ Generate a tracking event based on what you SEE in the screenshots.`,
   }
 
   const raw = await openRouterChat(settings, messages);
-  const match = raw.match(/\{[\s\S]*\}/);
-  const jsonText = match ? match[0] : raw;
+  
+  // Extract JSON
+  const jsonText = extractJsonArray(raw) || extractJsonObject(raw);
 
   try {
     const parsed = JSON.parse(jsonText);
 
-    const eventName = String(parsed.eventName || 'unknownEvent');
+    const eventName = String(parsed.eventName || 'unknown_event');
     const eventDisplayName = String(parsed.eventDisplayName || parsed.eventName || '未知事件');
     const category = String(parsed.category || inferCategoryFromContext(input.pageContextTexts));
     const triggerCondition = String(parsed.triggerCondition || '用户触发时');
@@ -183,7 +309,11 @@ Generate a tracking event based on what you SEE in the screenshots.`,
       eventDisplayName: `${input.text || input.nodeName}`,
       category,
       triggerCondition: '用户点击时触发',
-      properties: inferPropertiesFromContext(input.pageContextTexts),
+      properties: [
+        { key: 'source_page', displayName: '来源页面', description: '当前页面名称' },
+        { key: 'element_name', displayName: '元素名称', description: '交互元素的名称' },
+        { key: 'action_type', displayName: '交互类型', description: '用户操作类型 (tap, slide 等)' },
+      ],
       verified: false,
     };
   }
@@ -198,71 +328,106 @@ function toSnakeCase(s: string): string {
     .replace(/_+/g, '_');
 }
 
+/**
+ * Extract JSON array from AI response with balanced bracket matching.
+ */
+function extractJsonArray(raw: string): string {
+  const codeBlockMatch = raw.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/);
+  if (codeBlockMatch) return codeBlockMatch[1];
+  
+  const startIdx = raw.indexOf('[');
+  if (startIdx === -1) return '';
+  
+  // Simple extraction for now, balanced matching is better but complex to inline perfectly without helper
+  // Fallback to last closing bracket
+  const lastIdx = raw.lastIndexOf(']');
+  if (lastIdx > startIdx) return raw.slice(startIdx, lastIdx + 1);
+  return '';
+}
+
+function extractJsonObject(raw: string): string {
+  const codeBlockMatch = raw.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+  if (codeBlockMatch) return codeBlockMatch[1];
+  
+  const startIdx = raw.indexOf('{');
+  if (startIdx === -1) return '{}';
+  const lastIdx = raw.lastIndexOf('}');
+  if (lastIdx > startIdx) return raw.slice(startIdx, lastIdx + 1);
+  return '{}';
+}
+
 function inferCategoryFromContext(texts: string[]): string {
   const joined = texts.join(' ').toLowerCase();
   
-  if (joined.includes('order') || joined.includes('limit price') || joined.includes('open orders')) return 'Orders';
-  if (joined.includes('swap') || joined.includes('exchange')) return 'Trade';
-  if (joined.includes('send') && (joined.includes('address') || joined.includes('amount'))) return 'Send';
-  if (joined.includes('receive') || joined.includes('deposit')) return 'Receive';
-  if (joined.includes('market') || joined.includes('price') || joined.includes('chart')) return 'Market';
-  if (joined.includes('nft')) return 'NFT';
-  if (joined.includes('dapp') || joined.includes('connect')) return 'DApp';
-  if (joined.includes('setting')) return 'Settings';
-  if (joined.includes('onboarding') || joined.includes('welcome') || joined.includes('create wallet')) return 'Onboarding';
+  // Order-related
+  if (joined.includes('order') || joined.includes('limit price') || joined.includes('open orders')) return 'order';
+  // Swap/Trade
+  if (joined.includes('swap') || joined.includes('exchange') || joined.includes('slippage')) return 'swap';
+  // Send
+  if (joined.includes('send') && (joined.includes('address') || joined.includes('amount') || joined.includes('recipient'))) return 'send';
+  // Receive
+  if (joined.includes('receive') || joined.includes('deposit') || joined.includes('qr code')) return 'receive';
+  // Market
+  if (joined.includes('market') || joined.includes('price') || joined.includes('chart') || joined.includes('watchlist')) return 'market';
+  // NFT
+  if (joined.includes('nft') || joined.includes('collectible')) return 'nft';
+  // DApp
+  if (joined.includes('dapp') || joined.includes('connect') || joined.includes('walletconnect')) return 'dapp';
+  // Earn/Staking
+  if (joined.includes('stake') || joined.includes('apy') || joined.includes('earn') || joined.includes('rewards')) return 'earn';
+  // Settings
+  if (joined.includes('setting') || joined.includes('security') || joined.includes('backup')) return 'settings';
+  // Onboarding
+  if (joined.includes('onboarding') || joined.includes('welcome') || joined.includes('create wallet') || joined.includes('import wallet')) return 'onboarding';
+  // Notification
+  if (joined.includes('notification') || joined.includes('alert') || joined.includes('price alert')) return 'notification';
   
-  return 'Wallet';
+  return 'wallet';
 }
 
 function inferEventNameFromContext(nodeName: string, text: string | undefined, pageTexts: string[]): string {
   const name = (text || nodeName).toLowerCase();
   const context = pageTexts.join(' ').toLowerCase();
   
-  if (context.includes('order')) {
-    if (name.includes('cancel')) return 'cancelOrder';
-    if (name.includes('detail') || name.includes('view')) return 'viewOrderDetail';
-    if (name.includes('history')) return 'viewOrderHistory';
-  }
+  let module = 'app';
+  if (context.includes('order')) module = 'order';
+  else if (context.includes('swap')) module = 'swap';
+  else if (context.includes('market')) module = 'market';
+  else if (context.includes('send')) module = 'send';
   
-  if (name.includes('swap')) return 'confirmSwap';
-  if (name.includes('send')) return 'confirmSend';
-  if (name.includes('cancel')) return 'cancelAction';
-  if (name.includes('confirm')) return 'confirmAction';
-  
-  const cleaned = name.replace(/[^a-zA-Z]/g, '');
-  return cleaned ? `tap${cleaned.charAt(0).toUpperCase() + cleaned.slice(1)}` : 'tapElement';
+  // Fallback construction
+  const cleaned = name.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+  return `${module}_tap_${cleaned || 'element'}`;
 }
 
 function inferPropertiesFromContext(texts: string[]): TrackingProperty[] {
   const joined = texts.join(' ').toLowerCase();
   const props: TrackingProperty[] = [];
   
+  // Always add source_page as base property
+  props.push({ key: 'source_page', displayName: '来源页面', description: '用户从哪个页面触发' });
+  
+  // Order-related properties
   if (joined.includes('order') || joined.includes('limit')) {
     props.push(
       { key: 'order_id', displayName: '订单ID', description: '订单唯一标识' },
       { key: 'order_type', displayName: '订单类型', description: '订单类型', possibleValues: 'limit, market' },
-      { key: 'order_status', displayName: '订单状态', description: '当前状态', possibleValues: 'open, filled, cancelled' }
+      { key: 'order_side', displayName: '订单方向', description: '买入或卖出', possibleValues: 'buy, sell' },
+      { key: 'order_status', displayName: '订单状态', description: '当前状态', possibleValues: 'open, filled, cancelled, expired' }
     );
   }
   
-  if (joined.includes('symbol') || joined.includes('token') || joined.includes('matic') || joined.includes('usdc')) {
+  // Swap-related properties
+  if (joined.includes('swap') || joined.includes('exchange')) {
     props.push(
-      { key: 'token_symbol', displayName: '代币符号', description: '代币名称' },
-      { key: 'token_amount', displayName: '代币数量', description: '数量' }
+      { key: 'token_from', displayName: '源代币', description: '兑换的源代币符号' },
+      { key: 'token_to', displayName: '目标代币', description: '兑换的目标代币符号' },
+      { key: 'amount_from', displayName: '源数量', description: '兑换的源代币数量' },
+      { key: 'slippage', displayName: '滑点', description: '设置的滑点百分比' }
     );
   }
   
-  if (joined.includes('network') || joined.includes('ethereum') || joined.includes('polygon')) {
-    props.push(
-      { key: 'network', displayName: '网络', description: '区块链网络', possibleValues: 'ethereum, polygon, bsc' }
-    );
-  }
-  
-  if (props.length === 0) {
-    props.push({ key: 'source_screen', displayName: '来源页面', description: '用户从哪个页面触发' });
-  }
-  
-  return props.slice(0, 4);
+  return props.slice(0, 5);
 }
 
 export function attachTrackingToLayer(nodeId: string, event: TrackingEvent): void {
@@ -310,62 +475,94 @@ export function readTrackingFromLayer(
 
 // ============ VISION-BASED PAGE ANALYSIS ============
 
-const VISION_PAGE_ANALYSIS_PROMPT = `You are an expert at analyzing mobile app UI screenshots to identify ALL interactive elements that need tracking.
+const VISION_PAGE_ANALYSIS_PROMPT = `You are an expert at analyzing **Web3 Wallet App** UI screenshots to identify ALL interactive elements that need tracking.
 
-**YOUR TASK:**
-1. LOOK at the screenshot carefully - this is a Web3 Wallet app
-2. IDENTIFY all interactive elements (buttons, tabs, cards, inputs, toggles, links, etc.)
-3. For EACH interactive element, generate a tracking event
+---
 
-**CRITICAL - Use your VISUAL understanding:**
-- Don't just rely on element names - they may be inaccurate (e.g., "Frame 123")
-- LOOK at what the element actually IS and DOES
-- Understand the PAGE CONTEXT: Is this an Orders page? Trading page? Settings?
+## 🎯 WHAT TO TRACK (Product Expert Guidelines)
 
-**I will also provide a list of element names from the design file as HINTS:**
-- These names are OPTIONAL references - some may be useful, many may not
-- Prioritize what you SEE in the screenshot over the element names
-- If a name like "CancelButton" matches what you see, use that info
-- If a name like "Frame 34494" is meaningless, ignore it
+### ✅ MUST TRACK - Business value:
+| Element | Why | Example Event |
+|---------|-----|---------------|
+| 核心转化按钮 | 漏斗关键节点 | \`swap_tap_confirm\`, \`send_submit_transfer\` |
+| 功能Tab切换 | 功能使用分布 | \`trading_tap_tab\` + tab_name |
+| 代币/订单列表项 | 内容热度 | \`market_tap_token\`, \`order_tap_card\` |
+| 关键选择器 | 用户决策 | \`swap_select_token\`, \`send_select_network\` |
+| 收藏/关注 | 用户偏好 | \`market_toggle_watchlist\` |
+| 搜索操作 | 需求洞察 | \`market_tap_search\` |
+| 筛选/排序 | 习惯分析 | \`order_tap_filter\` |
+| 功能入口 | 路径分析 | \`wallet_tap_swap_entry\` |
 
-**Event Naming (camelCase):**
-- Be specific and contextual: "cancelLimitOrder" not just "cancel"
-- Include page context: "viewOrderDetail" not just "view"
-- Match the actual business action shown in the UI
+### ❌ SKIP - No business value:
+| Element | Why Skip |
+|---------|----------|
+| 返回按钮 / 关闭X | 通用导航，无业务意义 |
+| Loading / 加载中 | 系统状态 |
+| 错误弹窗关闭 | 被动操作 |
+| 下拉刷新 | 太频繁 |
+| Toast提示 | 结果反馈 |
+| 纯展示文本 | 无交互 |
+| 装饰图标 | 无功能 |
 
-**Categories:**
-- Orders: order lists, limit orders, order history, order details
-- Trade: swap, exchange, trading pairs
-- Market: prices, charts, token lists, watchlist
-- Wallet: balances, assets, portfolio overview
-- Send: sending crypto transactions
-- Receive: receiving crypto, deposit
-- Settings: app settings, preferences
-- Onboarding: initial wallet setup, welcome screens
+---
 
-**Output JSON array - one object per interactive element you identify:**
+## EVENT NAMING CONVENTION
+
+Format: \`{module}_{action}_{element}\` in **snake_case**
+
+### Structure:
+1. **module**: Business context - identify from screenshot (swap, trading, order, market, wallet, send)
+2. **action**: User action (tap, view, submit, toggle, select, input)
+3. **element**: UI element (confirm, cancel, tab, token, card, button)
+
+### Examples:
+| Module | Action | Element | Full Event Name |
+|--------|--------|---------|-----------------|
+| swap | tap | confirm | \`swap_tap_confirm\` |
+| trading | tap | tab | \`trading_tap_tab\` |
+| order | tap | cancel | \`order_tap_cancel\` |
+| market | tap | token | \`market_tap_token\` |
+| swap | select | token | \`swap_select_token\` |
+| send | input | address | \`send_input_address\` |
+| market | toggle | watchlist | \`market_toggle_watchlist\` |
+| send | submit | transfer | \`send_submit_transfer\` |
+
+---
+
+## ⚠️ MERGE SIMILAR ELEMENTS
+
+**Same-type elements → ONE event + property to distinguish**
+
+❌ BAD: \`trading_tap_swap\`, \`trading_tap_bridge\` (separate events)
+✅ GOOD: \`trading_tap_tab\` + \`tab_name\` = "swap" | "bridge" | "limit"
+
+| Module | UI Element | Event Name | Key Property |
+|--------|------------|------------|--------------|
+| trading | Tab bar | \`trading_tap_tab\` | \`tab_name\` |
+| main | Bottom nav | \`main_tap_tab\` | \`tab_name\` |
+| market | Token row | \`market_tap_token\` | \`token_symbol\` |
+| order | Order card | \`order_tap_card\` | \`order_id\` |
+| home | Banner | \`home_tap_banner\` | \`banner_id\` |
+
+---
+
+## OUTPUT FORMAT
+
+\`\`\`json
 [
   {
-    "elementDescription": "描述这个元素的位置和外观 (e.g., '右上角的Cancel按钮')",
-    "eventName": "camelCase event name",
-    "eventDisplayName": "中文描述",
-    "category": "category",
-    "triggerCondition": "触发时机 (when does this event fire)",
+    "elementDescription": "元素位置和外观描述 (e.g., '右上角红色Cancel按钮')",
+    "eventName": "snake_case_event_name",
+    "eventDisplayName": "中文事件描述",
+    "category": "category_name",
+    "triggerCondition": "触发时机描述",
     "properties": [
-      {"key": "snake_case", "displayName": "中文名", "description": "说明", "possibleValues": "可选值 if applicable"}
+      {"key": "snake_case", "displayName": "中文", "description": "说明", "possibleValues": "可选值"}
     ]
-  },
-  ...
+  }
 ]
-
-**IMPORTANT:** Identify ALL meaningful interactive elements. Common ones include:
-- Buttons (primary actions, cancel, confirm, submit)
-- Tab switches
-- List items / Cards that can be tapped
-- Input fields
-- Toggles / Switches
-- Navigation elements
-- Icons that are clickable`;
+\`\`\`
+`;
 
 export interface ElementHint {
   nodeName: string;
@@ -388,10 +585,6 @@ export interface VisionAnalysisOutput {
   triggerCondition: string;
   properties: TrackingProperty[];
 }
-
-// (Legacy generateTrackingBatch removed - now using analyzePageWithVision)
-
-// ============ NEW: VISION-FIRST PAGE ANALYSIS ============
 
 /**
  * Analyze a page screenshot with AI Vision to identify all interactive elements
@@ -450,32 +643,8 @@ Output JSON array. Be comprehensive - identify ALL clickable/interactive element
   const raw = await openRouterChat(settings, messages);
   
   console.log('[Vision Analysis] Raw AI response length:', raw.length);
-  console.log('[Vision Analysis] Raw AI response preview:', raw.slice(0, 500));
   
-  // Try multiple patterns to extract JSON array
-  let jsonText = '';
-  
-  // Pattern 1: Standard JSON array
-  const arrayMatch = raw.match(/\[[\s\S]*\]/);
-  if (arrayMatch) {
-    jsonText = arrayMatch[0];
-  }
-  
-  // Pattern 2: JSON in markdown code block
-  if (!jsonText) {
-    const codeBlockMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (codeBlockMatch) {
-      const inner = codeBlockMatch[1].trim();
-      if (inner.startsWith('[')) {
-        jsonText = inner;
-      }
-    }
-  }
-  
-  // Pattern 3: Use raw if it looks like JSON
-  if (!jsonText && raw.trim().startsWith('[')) {
-    jsonText = raw.trim();
-  }
+  const jsonText = extractJsonArray(raw);
   
   if (!jsonText) {
     console.error('[Vision Analysis] Could not find JSON array in response:', raw);
@@ -518,24 +687,16 @@ Output JSON array. Be comprehensive - identify ALL clickable/interactive element
         category: String(item.category || 'Wallet'),
         triggerCondition: String(item.triggerCondition || '用户点击时'),
         properties: properties.length > 0 ? properties : [
-          { key: 'source_screen', displayName: '来源页面', description: '当前页面' }
+          { key: 'source_page', displayName: '来源页面', description: '当前页面' }
         ],
       });
     }
     
-    if (results.length === 0) {
-      console.error('[Vision Analysis] No valid events parsed from:', parsed);
-      throw new Error('AI 返回的数据无法解析为有效埋点，请重试');
-    }
-    
-    console.log('[Vision Analysis] Successfully parsed', results.length, 'events');
     return results;
   } catch (e) {
     const error = e as Error;
     console.error('[Vision Analysis] Parse error:', error.message);
-    console.error('[Vision Analysis] jsonText was:', jsonText.slice(0, 300));
     
-    // If it's our own error, rethrow
     if (error.message.includes('AI ')) {
       throw error;
     }
