@@ -138,82 +138,45 @@ Do NOT generate keys for:
 - Percentages: "25%", "+50%", "0.5%"
 - Placeholder text: "Label", "Description", "Button", "Text", "(Optional)", "(Edited)"
 - Mathematical symbols: "+", "-", "=", "→"
-- Numbered items: "1.", "2."
-- Sample/mock data that would be dynamic in real app
+- Sample/mock data
 
 DO generate keys for:
-- UI text: "Wallet", "Settings", "Download", "Search"
-- Action buttons: "Create", "Cancel", "Swap", "Bridge", "Buy"
-- Navigation items: "Market", "Earn", "Browser"
-- Messages: "Something went wrong", "Please complete the creation"
-- Feature names: "Refer a friend", "Address book", "My device"
-- Descriptions: actual meaningful descriptions (not placeholder "Description")
-- Status text: "Open", "Pending", "Completed"
+- UI text, buttons, navigation, messages, status text
 
-**Key Naming Rules - IMPORTANT:**
+**Key Naming Format:** \`{module}::{type}_{name}\`
 
-Format: \`{module}::{action}_{content}\`
+**Modules** (use the most specific one):
+- \`limit_order\` - Limit order feature
+- \`swap\` - Token swap
+- \`bridge\` - Cross-chain bridge
+- \`send\` / \`receive\` - Transfer
+- \`market\` - Market data
+- \`wallet\` - Portfolio
+- \`earn\` - Staking/yield
+- \`settings\` - Settings
+- \`verify\` - Verification flows
 
-1. **module** - Identify the business module based on context:
-   - \`wallet\` - Wallet management, accounts, balances
-   - \`swap\` - Token swap functionality
-   - \`bridge\` - Cross-chain bridge
-   - \`market\` - Market data, prices, charts
-   - \`earn\` - Staking, yield, rewards
-   - \`browser\` - DApp browser
-   - \`settings\` - App settings, preferences
-   - \`onboarding\` - Welcome, setup, tutorials
-   - \`transaction\` - Send, receive, history
-   - \`common\` - Shared UI elements across modules
-   - \`nav\` - Navigation elements
-   - \`error\` - Error messages
-   - \`notification\` - Notifications, alerts
-
-2. **action** - What type of UI element:
-   - \`btn\` - Button
-   - \`title\` - Title/heading
-   - \`label\` - Form label, field name
-   - \`msg\` - Message, description
-   - \`hint\` - Hint, placeholder
-   - \`status\` - Status text
-   - \`tab\` - Tab name
-   - \`option\` - Option/choice
-   - \`link\` - Link text
-
-3. **content** - Brief description in snake_case
+**Types:** \`btn\`, \`title\`, \`label\`, \`msg\`, \`status\`, \`tab\`, \`hint\`
 
 **Examples:**
-- "Swap" button in swap screen → \`swap::btn_swap\`
-- "Balance" label in wallet → \`wallet::label_balance\`
-- "Settings" nav item → \`nav::tab_settings\`
-- "Something went wrong" error → \`error::msg_generic\`
-- "Connect wallet" button → \`common::btn_connect_wallet\`
-- "Unlimited" option → \`swap::option_unlimited\`
-- "Slippage" label → \`swap::label_slippage\`
-- "Open orders" title → \`swap::title_open_orders\`
+- "Cancel" on order page → \`limit_order::btn_cancel\`
+- "Cancel multiple orders" → \`limit_order::btn_cancel_multiple\`
+- "Open" status → \`limit_order::status_open\`
+- "Limit price" → \`limit_order::label_limit_price\`
+- "Expire in" → \`limit_order::label_expire_in\`
+- "Verify ASC" → \`verify::btn_verify_asc\`
+- "Confirm signature" → \`verify::msg_confirm_signature\`
+- "Swap" tab → \`swap::tab_swap\`
 
-**Output JSON Format:**
+**Output JSON:**
 \`\`\`json
 {
   "keys": [
-    {
-      "key": "swap::btn_confirm",
-      "value": "Confirm",
-      "originalText": "确认",
-      "detectedLanguage": "zh",
-      "category": "swap",
-      "context": "Confirm swap transaction button"
-    }
+    {"key": "limit_order::btn_cancel", "value": "Cancel", "originalText": "取消", "detectedLanguage": "zh", "category": "limit_order", "context": "Cancel order button"}
   ],
-  "filtered": ["1", "Label", "$3,915.42", "ETH"]
+  "filtered": ["1", "$100"]
 }
-\`\`\`
-
-**Important:**
-- Analyze the screenshot to understand which module the text belongs to
-- Only include REAL translatable text
-- Skip anything that looks like dynamic/sample data
-- Be aggressive in filtering - when in doubt, skip it`;
+\`\`\``;
 
   // Build user message with optional additional prompt
   let userMessage = `Frames: ${frameNames.join(', ')}\n\nText List:\n${texts.map((t, i) => `${i + 1}. [${t.frameName}/${t.nodeName}] ${t.textContent}`).join('\n')}\n\nPlease generate English i18n keys for all texts above.`;
