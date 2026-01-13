@@ -47,17 +47,7 @@ function pickCandidates(sections: PRDSection[], context: ScanContext): PRDSectio
 }
 
 async function loadKB(settings: Settings): Promise<PRDSection[]> {
-  if (!settings.prdEndpointUrl) return kb as unknown as PRDSection[];
-
-  const res = await fetch(settings.prdEndpointUrl, { method: 'GET' });
-  if (!res.ok) {
-    throw new Error(`KB endpoint error ${res.status}`);
-  }
-  const json = await res.json();
-  if (!Array.isArray(json)) {
-    throw new Error('KB endpoint must return a JSON array');
-  }
-  return json as PRDSection[];
+  return kb as unknown as PRDSection[];
 }
 
 export async function syncPRD(

@@ -4,7 +4,6 @@ import type { Mode, PluginToUIMessage, Settings, TrackingEvent, UIToPluginMessag
 import { scanSelectedFrame, scanSelectedInteractiveNodes, exportNodeAsBase64, getRootFrame, scanFrameForInteractiveElements } from './scan';
 import { syncPRD } from './prd';
 import { attachTrackingToLayer, generateTrackingForNode, readTrackingFromLayer, analyzePageWithVision, type ElementHint } from './tracker';
-import { fetchConfluencePage, compareAndMergePRD, syncToConfluence, testConfluenceConnection } from './confluence';
 import { scanTextNodesMultiFrame, generateI18nKeys, exportSingleAddCommand, exportBulkaddData, exportMultiCheckCommand, exportAsJSON, exportAsCSV, createI18nTable } from './i18n';
 
 const STORAGE_SETTINGS = 'onekey_settings';
@@ -71,137 +70,6 @@ async function pushScanContext() {
   }
 }
 
-async function doTestConfluenceConnection() {
-  try {
-    post({
-      type: 'LOADING_STATUS',
-      status: {
-        isLoading: true,
-        message: '正在测试 Confluence 连接...'
-      }
-    });
-
-    // Check if Confluence authentication is configured
-    if (!settings.confluenceUrl || !settings.confluenceEmail || !settings.confluenceApiToken) {
-      figma.notify('❌ 请先在设置中配置 Confluence 认证信息', { timeout: 5000 });
-      post({ type: 'ERROR', message: '请先在设置中配置 Confluence 认证信息' });
-      return;
-    }
-
-    console.log('[Debug] Testing Confluence connection with settings:', {
-      url: settings.confluenceUrl,
-      email: settings.confluenceEmail,
-      hasToken: !!settings.confluenceApiToken,
-    });
-
-    const result = await testConfluenceConnection({
-      url: settings.confluenceUrl,
-      email: settings.confluenceEmail,
-      apiToken: settings.confluenceApiToken,
-    });
-
-    console.log('[Debug] Test result:', result);
-
-    if (result.success) {
-      figma.notify(result.message, { timeout: 5000 });
-    } else {
-      figma.notify(result.message, { timeout: 8000 });
-      post({ type: 'ERROR', message: result.message });
-    }
-
-  } catch (error) {
-    const errorMsg = `❌ 测试失败: ${(error as Error).message}`;
-    console.error('[Debug] Test connection error:', error);
-    figma.notify(errorMsg, { timeout: 8000 });
-    post({ type: 'ERROR', message: errorMsg });
-  } finally {
-    post({
-      type: 'LOADING_STATUS',
-      status: {
-        isLoading: false
-      }
-    });
-  }
-}
-
-async function doSyncToConfluence(confluenceUrl: string, markdown: string) {
-  try {
-    post({
-      type: 'LOADING_STATUS',
-      status: {
-        isLoading: true,
-        message: '正在同步到 Confluence...'
-      }
-    });
-
-    // Check if Confluence authentication is configured
-    if (!settings.confluenceUrl || !settings.confluenceEmail || !settings.confluenceApiToken) {
-      // Fallback: Copy to clipboard and open URL
-      post({ 
-        type: 'COPY_TO_CLIPBOARD_ACK', 
-        text: markdown 
-      });
-
-      figma.notify('⚠️ 请先在设置中配置 Confluence 认证信息\n\nPRD 已复制到剪贴板，正在打开 Confluence 页面', {
-        timeout: 8000
-      });
-
-      post({
-        type: 'OPEN_URL',
-        url: confluenceUrl
-      });
-      
-      return;
-    }
-
-    // Extract PRD title from markdown
-    const titleMatch = markdown.match(/^#\s+(.+)$/m);
-    const title = titleMatch ? titleMatch[1] : 'PRD Document';
-
-    // Sync to Confluence using REST API
-    const result = await syncToConfluence(
-      confluenceUrl,
-      markdown,
-      title,
-      {
-        url: settings.confluenceUrl,
-        email: settings.confluenceEmail,
-        apiToken: settings.confluenceApiToken,
-      }
-    );
-
-    if (result.success) {
-      figma.notify(`✅ ${result.message}`, { timeout: 5000 });
-      
-      // Open the Confluence page
-      if (result.url) {
-        post({
-          type: 'OPEN_URL',
-          url: result.url
-        });
-      }
-    } else {
-      figma.notify(`❌ ${result.message}`, { timeout: 8000 });
-      
-      // Fallback: Copy to clipboard
-      post({ 
-        type: 'COPY_TO_CLIPBOARD_ACK', 
-        text: markdown 
-      });
-    }
-
-  } catch (error) {
-    figma.notify('❌ 同步失败: ' + (error as Error).message, { timeout: 8000 });
-    post({ type: 'ERROR', message: (error as Error).message });
-  } finally {
-    post({
-      type: 'LOADING_STATUS',
-      status: {
-        isLoading: false
-      }
-    });
-  }
-}
 
 async function doSyncPRD(additionalPrompt?: string, ctx?: Awaited<ReturnType<typeof scanSelectedFrame>>) {
   const context = ctx || await scanSelectedFrame();
@@ -220,11 +88,8 @@ async function doSyncPRD(additionalPrompt?: string, ctx?: Awaited<ReturnType<typ
       } 
     });
     
-    // Generate new PRD (pure AI generation, no Confluence involved)
+    // Generate new PRD
     const result = await syncPRD(settings, context, additionalPrompt);
-    
-    // Note: Confluence integration (fetching/merging) has been removed from the generation flow
-    // If you want to sync to Confluence, use the "🔄 同步" button after generation
     
     // Hide loading
     post({ type: 'LOADING_STATUS', status: { isLoading: false } });
@@ -562,16 +427,6 @@ figma.ui.onmessage = async (msg: UIToPluginMessage) => {
 
     if (msg.type === 'SYNC_PRD_NOW') {
       await doSyncPRD(msg.additionalPrompt);
-      return;
-    }
-
-    if (msg.type === 'SYNC_TO_CONFLUENCE') {
-      await doSyncToConfluence(msg.confluenceUrl, msg.markdown);
-      return;
-    }
-
-    if (msg.type === 'TEST_CONFLUENCE_CONNECTION') {
-      await doTestConfluenceConnection();
       return;
     }
 

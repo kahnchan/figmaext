@@ -3,11 +3,6 @@ export type Mode = 'prd' | 'tracker' | 'i18n';
 export interface Settings {
   openRouterApiKey: string;
   model: string;
-  prdEndpointUrl?: string; // optional external KB endpoint
-  // Confluence API authentication
-  confluenceUrl?: string; // e.g., https://your-domain.atlassian.net
-  confluenceEmail?: string; // Your Atlassian account email
-  confluenceApiToken?: string; // API token from https://id.atlassian.com/manage-profile/security/api-tokens
   // Lokalise project configuration
   lokaliseProject?: string; // Default project name (e.g., v5)
 }
@@ -48,7 +43,6 @@ export interface PRDTask {
   taskId: string;
   taskName: string;
   prdResult: PRDResult | null;
-  confluenceUrl?: string;
   scanContext: ScanContext | null;
   createdAt: number;
   updatedAt: number;
@@ -122,9 +116,6 @@ export type UIToPluginMessage =
   | { type: 'SELECT_PRD_TASK'; taskId: string }
   | { type: 'DELETE_PRD_TASK'; taskId: string }
   | { type: 'UPDATE_TASK_NAME'; taskId: string; taskName: string }
-  | { type: 'UPDATE_TASK_CONFLUENCE_URL'; taskId: string; confluenceUrl: string }
-  | { type: 'SYNC_TO_CONFLUENCE'; confluenceUrl: string; markdown: string }
-  | { type: 'TEST_CONFLUENCE_CONNECTION' }
   // i18n messages
   | { type: 'GENERATE_I18N_KEYS'; projectName?: string; additionalPrompt?: string; excludeTexts?: string[] }
   | { type: 'UPDATE_I18N_KEY'; key: I18nKey }
@@ -153,7 +144,6 @@ export type PluginToUIMessage =
   | { type: 'CURRENT_TASK'; task: PRDTask | null }
   | { type: 'OPEN_URL'; url: string }
   | { type: 'COPY_TO_CLIPBOARD_ACK'; text: string }
-  | { type: 'CONFLUENCE_TEST_RESULT'; success: boolean; message: string; spaces?: { id: string; name: string }[] }
   // i18n messages
   | { type: 'I18N_KEYS'; keys: I18nKey[] }
   | { type: 'I18N_RESULT'; result: I18nResult | null };

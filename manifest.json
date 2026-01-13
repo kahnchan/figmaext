@@ -7,8 +7,7 @@
   "editorType": ["figma"],
   "networkAccess": {
     "allowedDomains": [
-      "https://openrouter.ai",
-      "https://*.atlassian.net"
+      "https://openrouter.ai"
     ]
   }
 }

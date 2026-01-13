@@ -102,75 +102,8 @@ function SettingsPanel({
         </div>
 
         <div style={{ marginBottom: 12 }}>
-          <div className="label">PRD KB Endpoint (optional)</div>
-          <input
-            className="input"
-            value={settings.prdEndpointUrl || ''}
-            onChange={(e) => onChange({ ...settings, prdEndpointUrl: e.target.value || undefined })}
-            placeholder="https://.../prd.json"
-          />
-          <div className="small" style={{ marginTop: 6 }}>
-            留空则使用本地模拟知识库。
-          </div>
         </div>
 
-        <div className="hr" />
-        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 12 }}>Confluence 集成</div>
-        
-        <div style={{ marginBottom: 12 }}>
-          <div className="label">Confluence URL</div>
-          <input
-            className="input"
-            value={settings.confluenceUrl || ''}
-            onChange={(e) => onChange({ ...settings, confluenceUrl: e.target.value || undefined })}
-            placeholder="https://your-domain.atlassian.net"
-          />
-          <div className="small" style={{ marginTop: 6 }}>
-            你的 Atlassian 域名地址
-          </div>
-        </div>
-
-        <div style={{ marginBottom: 12 }}>
-          <div className="label">Confluence Email</div>
-          <input
-            className="input"
-            type="email"
-            value={settings.confluenceEmail || ''}
-            onChange={(e) => onChange({ ...settings, confluenceEmail: e.target.value || undefined })}
-            placeholder="your-email@company.com"
-          />
-          <div className="small" style={{ marginTop: 6 }}>
-            你的 Atlassian 账号邮箱
-          </div>
-        </div>
-
-        <div style={{ marginBottom: 12 }}>
-          <div className="label">Confluence API Token</div>
-          <input
-            className="input"
-            type="password"
-            value={settings.confluenceApiToken || ''}
-            onChange={(e) => onChange({ ...settings, confluenceApiToken: e.target.value || undefined })}
-            placeholder="API Token"
-          />
-          <div className="small" style={{ marginTop: 6 }}>
-            获取：<span className="mono">id.atlassian.com/manage-profile/security/api-tokens</span>
-          </div>
-        </div>
-
-        <div style={{ marginBottom: 12 }}>
-          <button 
-            className="btn" 
-            style={{ width: '100%' }} 
-            onClick={() => postMessage({ type: 'TEST_CONFLUENCE_CONNECTION' })}
-            disabled={!settings.confluenceUrl || !settings.confluenceEmail || !settings.confluenceApiToken}
-          >
-            🔍 测试 Confluence 连接
-          </button>
-          <div className="small" style={{ marginTop: 6 }}>
-            点击测试认证信息是否正确
-          </div>
-        </div>
 
         <div className="hr" />
         <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 12 }}>Lokalise 配置</div>
@@ -210,7 +143,6 @@ function PRDSyncView({
   onToggleAutoSync: (v: boolean) => void;
 }) {
   const [additionalPrompt, setAdditionalPrompt] = React.useState('');
-  const [confluenceUrl, setConfluenceUrl] = React.useState('');
   const frameCount = context?.frames ? context.frames.length : (context ? 1 : 0);
   const isMultiFrame = frameCount > 1;
 
@@ -286,20 +218,6 @@ function PRDSyncView({
                 }}
               />
               
-              <div className="small" style={{ marginBottom: 6 }}>Confluence Wiki URL（可选）：</div>
-              <input
-                className="input"
-                value={confluenceUrl}
-                onChange={(e) => setConfluenceUrl(e.target.value)}
-                placeholder="https://your-company.atlassian.net/wiki/spaces/..."
-                style={{ 
-                  width: '100%', 
-                  marginBottom: 12,
-                  fontFamily: 'inherit',
-                  fontSize: '12px'
-                }}
-              />
-              
               <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
                 <button 
                   className="btn btnPrimary" 
@@ -331,30 +249,6 @@ function PRDSyncView({
                 >
                   📋 复制
                 </button>
-                <button
-                  className="btn"
-                  onClick={() => {
-                    if (!confluenceUrl) {
-                      alert('请先填写 Confluence Wiki URL');
-                      return;
-                    }
-                    if (confirm(`确认同步到 Confluence?\n\n${confluenceUrl}`)) {
-                      postMessage({
-                        type: 'SYNC_TO_CONFLUENCE',
-                        confluenceUrl,
-                        markdown: result.markdown
-                      });
-                    }
-                  }}
-                  disabled={!confluenceUrl}
-                  title="同步 PRD 到 Confluence Wiki"
-                  style={{ 
-                    opacity: confluenceUrl ? 1 : 0.5,
-                    cursor: confluenceUrl ? 'pointer' : 'not-allowed'
-                  }}
-                >
-                  🔄 同步
-                </button>
               </div>
             </div>
           </>
@@ -380,20 +274,6 @@ function PRDSyncView({
                   width: '100%', 
                   marginBottom: 8,
                   resize: 'vertical',
-                  fontFamily: 'inherit',
-                  fontSize: '12px'
-                }}
-              />
-              
-              <div className="small" style={{ marginBottom: 6 }}>Confluence Wiki URL（可选）：</div>
-              <input
-                className="input"
-                value={confluenceUrl}
-                onChange={(e) => setConfluenceUrl(e.target.value)}
-                placeholder="https://your-company.atlassian.net/wiki/spaces/..."
-                style={{ 
-                  width: '100%', 
-                  marginBottom: 12,
                   fontFamily: 'inherit',
                   fontSize: '12px'
                 }}
