@@ -1,6 +1,6 @@
 {
-  "name": "OneKey PRD Sync",
-  "id": "onekey-prd-sync",
+  "name": "ProdEase",
+  "id": "1592821267227437010",
   "api": "1.0.0",
   "main": "dist/code.js",
   "ui": "dist/ui.html",
@@ -9,5 +9,6 @@
     "allowedDomains": [
       "https://openrouter.ai"
     ]
-  }
+  },
+  "documentAccess": "dynamic-page"
 }
