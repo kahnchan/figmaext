@@ -153,33 +153,52 @@ function PRDSyncView({
           {isMultiFrame ? `Selected Frames (${frameCount})` : 'Selected Frame'}
         </div>
         
-        {isMultiFrame && context?.frames ? (
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
-              {context.frames[0].frameName} → ... → {context.frames[frameCount - 1].frameName}
+        {context ? (
+          context.frames && context.frames.length > 1 ? (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                {context.frames[0].frameName} → ... → {context.frames[context.frames.length - 1].frameName}
+              </div>
+              <div className="small">
+                完整产品流程（{context.frames.length} 个屏幕）· Text nodes: <span className="mono">{context.frames.reduce((acc, f) => acc + f.texts.length, 0)}</span> · Components: <span className="mono">{context.frames.reduce((acc, f) => acc + f.componentNames.length, 0)}</span>
+              </div>
             </div>
-            <div className="small">
-              完整产品流程（{frameCount} 个屏幕）
+          ) : (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600 }}>
+                {context.frameName || 'None'}
+              </div>
+              {context && (
+                <div className="small" style={{ marginTop: 6 }}>
+                  Text nodes: <span className="mono">{context.texts?.length || 0}</span> · Components: <span className="mono">{context.componentNames?.length || 0}</span>
+                </div>
+              )}
             </div>
-          </div>
+          )
         ) : (
           <div>
-            <div style={{ fontSize: 12, fontWeight: 600 }}>
-              {context ? context.frameName : 'None'}
+            <div style={{ fontSize: 12, color: 'var(--subtext)' }}>
+              请在 Figma 中选择一个或多个 Frame
             </div>
-            {context && (
-              <div className="small" style={{ marginTop: 6 }}>
-                Text nodes: <span className="mono">{context.texts?.length || 0}</span> · Components:{' '}
-                <span className="mono">{context.componentNames?.length || 0}</span>
-              </div>
-            )}
+            <div className="small" style={{ marginTop: 6 }}>
+              选择后点击下方按钮进行操作
+            </div>
           </div>
         )}
 
       </div>
 
       <div className="card">
-        <div className="label" style={{ marginBottom: 8 }}>PRD Output</div>
+        <div className="label" style={{ marginBottom: 8 }}>使用方法</div>
+        <div className="hr" />
+        <div className="small" style={{ marginBottom: 12, lineHeight: 1.6 }}>
+          <strong>单 Frame 模式：</strong>选择一个 Frame，生成该设计稿的 PRD 文档
+          <br/><br/>
+          <strong>多 Frame 流程模式：</strong>按住 Shift/Cmd 选择多个 Frame，生成完整产品流程的 PRD 文档
+        </div>
+        <div className="hr" />
+        
+        <div className="label" style={{ marginBottom: 8, marginTop: 12 }}>PRD Output</div>
         <div className="hr" />
         
         {result ? (
@@ -190,13 +209,7 @@ function PRDSyncView({
               paddingRight: '4px',
               marginBottom: 12
             }}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>{result.featureName}</div>
               <Markdown markdown={result.markdown} />
-              {result.matchedSections.length > 0 && (
-                <div className="small" style={{ marginTop: 10 }}>
-                  Matched: {result.matchedSections.join(', ')}
-                </div>
-              )}
             </div>
             
             <div className="hr" />
@@ -225,6 +238,7 @@ function PRDSyncView({
                     type: 'SYNC_PRD_NOW',
                     additionalPrompt: additionalPrompt || undefined
                   })}
+                  title="基于当前选择重新生成 PRD"
                 >
                   🔄 重新生成
                 </button>
@@ -249,19 +263,23 @@ function PRDSyncView({
                 >
                   📋 复制
                 </button>
+                <button 
+                  className="btn" 
+                  onClick={() => {
+                    if (confirm('确定要清空当前 PRD 吗？')) {
+                      postMessage({ type: 'CLEAR_PRD' });
+                      setAdditionalPrompt('');
+                    }
+                  }}
+                  title="清空当前 PRD"
+                >
+                  🗑️ 清空
+                </button>
               </div>
             </div>
           </>
         ) : (
           <>
-            <div className="small" style={{ marginBottom: 12 }}>
-              {isMultiFrame 
-                ? '选择多个 Frame（按住 Shift/Cmd 多选），然后点击下方按钮生成 PRD。'
-                : '选择一个 Frame，然后点击下方按钮生成 PRD。'}
-            </div>
-            
-            <div className="hr" />
-            
             <div style={{ marginTop: 12 }}>
               <div className="small" style={{ marginBottom: 6 }}>补充提示（可选）：</div>
               <textarea 
@@ -444,35 +462,35 @@ function I18nView({
           {isMultiFrame ? `Selected Frames (${frameCount})` : 'Selected Frame'}
         </div>
         
-        {frameNames.length > 0 ? (
-          <div>
-            {isMultiFrame ? (
-              <>
-                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
-                  {frameNames[0]} → ... → {frameNames[frameNames.length - 1]}
-                </div>
-                <div className="small">
-                  多个设计稿（{frameCount} 个屏幕）· Text nodes: <span className="mono">{textCount}</span>
-                </div>
-              </>
-            ) : (
-              <>
-                <div style={{ fontSize: 12, fontWeight: 600 }}>
-                  {frameNames[0]}
-                </div>
+        {context ? (
+          context.frames && context.frames.length > 1 ? (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                {context.frames[0].frameName} → ... → {context.frames[context.frames.length - 1].frameName}
+              </div>
+              <div className="small">
+                完整产品流程（{context.frames.length} 个屏幕）· Text nodes: <span className="mono">{context.frames.reduce((acc, f) => acc + f.texts.length, 0)}</span> · Components: <span className="mono">{context.frames.reduce((acc, f) => acc + f.componentNames.length, 0)}</span>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600 }}>
+                {context.frameName || 'None'}
+              </div>
+              {context && (
                 <div className="small" style={{ marginTop: 6 }}>
-                  Text nodes: <span className="mono">{textCount}</span>
+                  Text nodes: <span className="mono">{context.texts?.length || 0}</span> · Components: <span className="mono">{context.componentNames?.length || 0}</span>
                 </div>
-              </>
-            )}
-          </div>
+              )}
+            </div>
+          )
         ) : (
           <div>
             <div style={{ fontSize: 12, color: 'var(--subtext)' }}>
               请在 Figma 中选择一个或多个 Frame
             </div>
             <div className="small" style={{ marginTop: 6 }}>
-              选择后点击下方"生成 i18n Keys"按钮
+              选择后点击下方按钮进行操作
             </div>
           </div>
         )}
@@ -480,7 +498,16 @@ function I18nView({
 
       {/* i18n Keys Generation & Output */}
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <div className="label" style={{ marginBottom: 8 }}>使用方法</div>
+        <div className="hr" />
+        <div className="small" style={{ marginBottom: 12, lineHeight: 1.6 }}>
+          <strong>单 Frame 模式：</strong>选择一个 Frame，生成该设计稿中的 i18n keys
+          <br/><br/>
+          <strong>多 Frame 流程模式：</strong>按住 Shift/Cmd 选择多个 Frame，批量生成所有设计稿的 i18n keys
+        </div>
+        <div className="hr" />
+        
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, marginTop: 12 }}>
           <div className="label" style={{ marginBottom: 0 }}>i18n Keys</div>
           {i18nResult && (
             <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: 12 }}>
@@ -606,18 +633,33 @@ function I18nView({
                 }}
               />
               
-              <button 
-                className="btn" 
-                style={{ width: '100%' }}
-                onClick={() => postMessage({ 
-                  type: 'GENERATE_I18N_KEYS', 
-                  projectName,
-                  additionalPrompt: additionalPrompt || undefined,
-                  excludeTexts: deletedTexts.length > 0 ? deletedTexts : undefined
-                })}
-              >
-                🔄 重新生成 {deletedTexts.length > 0 && `(已排除 ${deletedTexts.length} 项)`}
-              </button>
+              <div className="row" style={{ gap: 8 }}>
+                <button 
+                  className="btn" 
+                  style={{ flex: 1 }}
+                  onClick={() => postMessage({ 
+                    type: 'GENERATE_I18N_KEYS', 
+                    projectName,
+                    additionalPrompt: additionalPrompt || undefined,
+                    excludeTexts: deletedTexts.length > 0 ? deletedTexts : undefined
+                  })}
+                >
+                  🔄 重新生成 {deletedTexts.length > 0 && `(已排除 ${deletedTexts.length} 项)`}
+                </button>
+                <button 
+                  className="btn" 
+                  onClick={() => {
+                    if (confirm('确定要清空当前 i18n keys 吗？')) {
+                      postMessage({ type: 'CLEAR_I18N' });
+                      setAdditionalPrompt('');
+                      setDeletedTexts([]);
+                    }
+                  }}
+                  title="清空当前 i18n keys"
+                >
+                  🗑️ 清空
+                </button>
+              </div>
             </div>
           </>
         ) : (
@@ -790,30 +832,69 @@ function TrackerView({ context, events }: { context: ScanContext | null; events:
   return (
     <div className="content">
       <div className="card" style={{ marginBottom: 12 }}>
-        <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+        <div className="label" style={{ marginBottom: 8 }}>
+          {context?.frames && context.frames.length > 1 
+            ? `Selected Frames (${context.frames.length})` 
+            : 'Selected Frame'}
+        </div>
+        
+        {context ? (
+          context.frames && context.frames.length > 1 ? (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                {context.frames[0].frameName} → ... → {context.frames[context.frames.length - 1].frameName}
+              </div>
+              <div className="small">
+                完整产品流程（{context.frames.length} 个屏幕）· Text nodes: <span className="mono">{context.frames.reduce((acc, f) => acc + f.texts.length, 0)}</span> · Components: <span className="mono">{context.frames.reduce((acc, f) => acc + f.componentNames.length, 0)}</span>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600 }}>
+                {context.frameName || 'None'}
+              </div>
+              {context && (
+                <div className="small" style={{ marginTop: 6 }}>
+                  Text nodes: <span className="mono">{context.texts?.length || 0}</span> · Components: <span className="mono">{context.componentNames?.length || 0}</span>
+                </div>
+              )}
+            </div>
+          )
+        ) : (
           <div>
-            <div className="label">Selected Frame</div>
-            <div style={{ fontSize: 12, fontWeight: 600 }}>{context ? context.frameName : 'None'}</div>
+            <div style={{ fontSize: 12, color: 'var(--subtext)' }}>
+              请在 Figma 中选择一个或多个 Frame
+            </div>
+            <div className="small" style={{ marginTop: 6 }}>
+              选择后点击下方按钮进行操作
+            </div>
           </div>
-        </div>
+        )}
+      </div>
 
-        <div className="row" style={{ gap: 8, marginBottom: 8 }}>
-          <button 
-            className="btn btnPrimary" 
-            onClick={() => postMessage({ type: 'SCAN_PAGE_FOR_TRACKING' })}
-            title="扫描整个页面，识别所有可交互元素"
-          >
-            🔍 Scan Page
-          </button>
-          <button 
-            className="btn" 
-            onClick={() => postMessage({ type: 'GENERATE_TRACKING_NOW' })}
-            title="只为当前选中的元素生成"
-          >
-            Generate Selected
-          </button>
+      {/* Tracker Actions */}
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div className="label" style={{ marginBottom: 8 }}>使用方法</div>
+        <div className="hr" />
+        <div className="small" style={{ marginBottom: 12, lineHeight: 1.6 }}>
+          <strong>使用方法：</strong><br/>
+          选择一个 Frame，点击 "🔍 Scan Page" 自动识别所有可交互元素并生成埋点
         </div>
+        
+        <button 
+          className="btn btnPrimary" 
+          onClick={() => postMessage({ type: 'SCAN_PAGE_FOR_TRACKING' })}
+          title="扫描整个页面，识别所有可交互元素"
+          disabled={!context}
+          style={{ width: '100%' }}
+        >
+          🔍 Scan Page
+        </button>
+      </div>
 
+      {/* Tracking Events */}
+      <div className="card">
+        <div className="label" style={{ marginBottom: 8 }}>Tracking Events</div>
         <div className="hr" />
 
         {events.length > 0 && (
@@ -871,18 +952,7 @@ function TrackerView({ context, events }: { context: ScanContext | null; events:
         )}
       </div>
 
-      {events.length === 0 ? (
-        <div className="card">
-          <div className="small">
-            <strong>使用方法：</strong><br/><br/>
-            1. 选择一个 Frame（整个页面）<br/>
-            2. 点击 <strong>Scan Page</strong> 自动识别所有可交互元素<br/>
-            3. AI 会批量生成埋点建议<br/>
-            4. 复核：勾选需要的，删除不需要的<br/>
-            5. 导出选中的埋点
-          </div>
-        </div>
-      ) : (
+      {events.length > 0 && (
         categories.map((cat) => (
           <div key={cat} style={{ marginBottom: 12 }}>
             <div className="categoryHeader">{cat} ({grouped[cat].length})</div>
@@ -1039,45 +1109,42 @@ function App() {
   return (
     <div className="container">
       <div className="header">
-        <div className="title">OneKey · PRD Sync</div>
-        <div className="headerRight">
-          <div className="tabs">
-            <button
-              className={`tabBtn ${mode === 'prd' ? 'tabBtnActive' : ''}`}
-              onClick={() => {
-                setMode('prd');
-                postMessage({ type: 'SET_MODE', mode: 'prd' });
-              }}
-            >
-              PRD
-            </button>
-            <button
-              className={`tabBtn ${mode === 'tracker' ? 'tabBtnActive' : ''}`}
-              onClick={() => {
-                setMode('tracker');
-                postMessage({ type: 'SET_MODE', mode: 'tracker' });
-              }}
-            >
-              Tracker
-            </button>
-            <button
-              className={`tabBtn ${mode === 'i18n' ? 'tabBtnActive' : ''}`}
-              onClick={() => {
-                setMode('i18n');
-                postMessage({ type: 'SET_MODE', mode: 'i18n' });
-              }}
-            >
-              i18n
-            </button>
-          </div>
+        <div className="tabs">
           <button
-            className={`iconBtn ${!hasApiKey ? 'iconBtnWarn' : ''}`}
-            onClick={() => setShowSettings(true)}
-            title="Settings"
+            className={`tabBtn ${mode === 'prd' ? 'tabBtnActive' : ''}`}
+            onClick={() => {
+              setMode('prd');
+              postMessage({ type: 'SET_MODE', mode: 'prd' });
+            }}
           >
-            ⚙
+            PRD
+          </button>
+          <button
+            className={`tabBtn ${mode === 'tracker' ? 'tabBtnActive' : ''}`}
+            onClick={() => {
+              setMode('tracker');
+              postMessage({ type: 'SET_MODE', mode: 'tracker' });
+            }}
+          >
+            Tracker
+          </button>
+          <button
+            className={`tabBtn ${mode === 'i18n' ? 'tabBtnActive' : ''}`}
+            onClick={() => {
+              setMode('i18n');
+              postMessage({ type: 'SET_MODE', mode: 'i18n' });
+            }}
+          >
+            i18n
           </button>
         </div>
+        <button
+          className={`iconBtn ${!hasApiKey ? 'iconBtnWarn' : ''}`}
+          onClick={() => setShowSettings(true)}
+          title="Settings"
+        >
+          ⚙
+        </button>
       </div>
 
       {!hasApiKey && (
@@ -1142,13 +1209,11 @@ function App() {
         </div>
       )}
 
-      <div className="notice">
-        {error ? (
+      {error && (
+        <div className="notice">
           <span style={{ color: 'var(--color-error)' }}>{error}</span>
-        ) : (
-          <span className="small">选择一个 Frame 使用 PRD Sync；选择按钮/输入框等用 Tracker Pro。</span>
-        )}
-      </div>
+        </div>
+      )}
 
       <LoadingOverlay status={loadingStatus} />
     </div>

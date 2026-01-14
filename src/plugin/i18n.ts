@@ -67,8 +67,16 @@ export async function scanTextNodesMultiFrame(frameIds: string[]): Promise<{
   let filteredCount = 0;
   
   for (const frameId of frameIds) {
-    const frame = figma.getNodeById(frameId) as FrameNode;
-    if (!frame || frame.type !== 'FRAME') continue;
+    const container = await figma.getNodeByIdAsync(frameId) as SceneNode;
+    if (!container) continue;
+    
+    // Support FRAME, COMPONENT, INSTANCE, GROUP
+    if (container.type !== 'FRAME' && 
+        container.type !== 'COMPONENT' && 
+        container.type !== 'INSTANCE' && 
+        container.type !== 'GROUP') {
+      continue;
+    }
     
     function traverse(node: SceneNode, frameName: string) {
       if (node.type === 'TEXT') {
@@ -88,13 +96,13 @@ export async function scanTextNodesMultiFrame(frameIds: string[]): Promise<{
         });
       }
       if ('children' in node) {
-        for (const child of node.children) {
+        for (const child of (node as FrameNode | ComponentNode | InstanceNode | GroupNode).children) {
           traverse(child, frameName);
         }
       }
     }
     
-    traverse(frame, frame.name);
+    traverse(container, container.name);
   }
   
   return { texts, filteredCount };
@@ -102,7 +110,7 @@ export async function scanTextNodesMultiFrame(frameIds: string[]): Promise<{
 
 // Export node as base64 screenshot (reusing from scan.ts)
 export async function exportNodeAsBase64(nodeId: string, maxWidth: number = 1200): Promise<string | null> {
-  const node = figma.getNodeById(nodeId);
+  const node = await figma.getNodeByIdAsync(nodeId);
   if (!node || !('exportAsync' in node)) return null;
 
   try {

@@ -4,54 +4,106 @@ function isFrame(node: SceneNode): node is FrameNode {
   return node.type === 'FRAME';
 }
 
+function isContainerNode(node: SceneNode): node is FrameNode | ComponentNode | InstanceNode | GroupNode {
+  return node.type === 'FRAME' || 
+         node.type === 'COMPONENT' || 
+         node.type === 'INSTANCE' || 
+         node.type === 'GROUP';
+}
+
+function getContainerNode(node: SceneNode): FrameNode | ComponentNode | InstanceNode | GroupNode | null {
+  // If the node itself is a container, use it
+  if (isContainerNode(node)) {
+    return node;
+  }
+  
+  // Otherwise, find the nearest parent container
+  let p: BaseNode | null = node.parent;
+  while (p) {
+    if (p.type === 'FRAME' || p.type === 'COMPONENT' || p.type === 'INSTANCE' || p.type === 'GROUP') {
+      return p as FrameNode | ComponentNode | InstanceNode | GroupNode;
+    }
+    p = p.parent;
+  }
+  
+  return null;
+}
+
 function uniq(arr: string[]): string[] {
   return Array.from(new Set(arr)).filter(Boolean);
 }
 
-export async function scanSelectedFrame(): Promise<ScanContext | null> {
+export async function scanSelectedFrame(includeScreenshots: boolean = true): Promise<ScanContext | null> {
   const selection = figma.currentPage.selection;
   if (selection.length === 0) return null;
 
-  // Support both single and multiple frame selection
-  const frames: FrameNode[] = [];
+  // Support selection of any container type: Frame, Component, Instance, Group
+  const containers: Array<FrameNode | ComponentNode | InstanceNode | GroupNode> = [];
   
   for (const node of selection) {
-    if (isFrame(node)) {
-      frames.push(node);
+    const container = getContainerNode(node);
+    if (container) {
+      // Avoid duplicates
+      if (!containers.find(c => c.id === container.id)) {
+        containers.push(container);
+      }
     }
   }
   
-  if (frames.length === 0) return null;
+  if (containers.length === 0) return null;
   
-  // Scan all selected frames
+  // Scan all selected containers (frames, components, instances, groups)
   const frameDataList: FrameData[] = await Promise.all(
-    frames.map(async (frame, index) => {
+    containers.map(async (container, index) => {
       const texts: string[] = [];
       const componentNames: string[] = [];
 
-      const descendants = frame.findAll(() => true);
-      for (const d of descendants) {
-        if (d.type === 'TEXT') {
-          const t = (d as TextNode).characters?.trim();
-          if (t) texts.push(t);
+      // Get container name
+      let containerName = container.name;
+      if (container.type === 'INSTANCE') {
+        const inst = container as InstanceNode;
+        try {
+          const mainComponent = await inst.getMainComponentAsync();
+          containerName = mainComponent?.name || inst.name;
+          if (mainComponent) componentNames.push(mainComponent.name);
+        } catch {
+          containerName = inst.name;
         }
+      } else if (container.type === 'COMPONENT') {
+        componentNames.push(container.name);
+      }
 
-        if (d.type === 'INSTANCE') {
-          const inst = d as InstanceNode;
-          componentNames.push(inst.mainComponent?.name || inst.name);
-        }
+      // Find all descendants (if the container supports findAll)
+      if ('findAll' in container) {
+        const descendants = container.findAll(() => true);
+        for (const d of descendants) {
+          if (d.type === 'TEXT') {
+            const t = (d as TextNode).characters?.trim();
+            if (t) texts.push(t);
+          }
 
-        if (d.type === 'COMPONENT') {
-          componentNames.push(d.name);
+          if (d.type === 'INSTANCE') {
+            const inst = d as InstanceNode;
+            try {
+              const mainComponent = await inst.getMainComponentAsync();
+              componentNames.push(mainComponent?.name || inst.name);
+            } catch {
+              componentNames.push(inst.name);
+            }
+          }
+
+          if (d.type === 'COMPONENT') {
+            componentNames.push(d.name);
+          }
         }
       }
 
-      // Capture screenshot for PRD documentation
-      const screenshotBase64 = await exportNodeAsBase64(frame.id, 800);
+      // Capture screenshot for PRD documentation (optional for performance)
+      const screenshotBase64 = includeScreenshots ? await exportNodeAsBase64(container.id, 800) : undefined;
 
       return {
-        frameId: frame.id,
-        frameName: frame.name,
+        frameId: container.id,
+        frameName: containerName,
         texts: uniq(texts).slice(0, 120),
         componentNames: uniq(componentNames).slice(0, 120),
         order: index,
@@ -151,7 +203,7 @@ export interface InteractiveNodeInfo {
   pageScreenshotBase64?: string;
 }
 
-export function scanSelectedInteractiveNodes(): InteractiveNodeInfo[] {
+export async function scanSelectedInteractiveNodes(): Promise<InteractiveNodeInfo[]> {
   const selection = figma.currentPage.selection;
   const nodes = selection.length > 0 ? selection : [];
 
@@ -164,7 +216,7 @@ export function scanSelectedInteractiveNodes(): InteractiveNodeInfo[] {
     return 'UnknownPage';
   }
 
-  function inferType(n: SceneNode): string {
+  async function inferType(n: SceneNode): Promise<string> {
     const name = (n.name || '').toLowerCase();
     if (n.type === 'TEXT') return 'Text';
     if (name.includes('button') || name.includes('btn')) return 'Button';
@@ -176,19 +228,34 @@ export function scanSelectedInteractiveNodes(): InteractiveNodeInfo[] {
     if (name.includes('card') || name.includes('item') || name.includes('row')) return 'ListItem';
     if (n.type === 'INSTANCE') {
       const inst = n as InstanceNode;
-      const compName = (inst.mainComponent?.name || inst.name || '').toLowerCase();
-      if (compName.includes('button') || compName.includes('btn')) return 'Button';
-      if (compName.includes('tab')) return 'Tab';
-      if (compName.includes('input')) return 'Input';
-      if (compName.includes('card') || compName.includes('item')) return 'ListItem';
+      try {
+        const mainComponent = await inst.getMainComponentAsync();
+        const compName = (mainComponent?.name || inst.name || '').toLowerCase();
+        if (compName.includes('button') || compName.includes('btn')) return 'Button';
+        if (compName.includes('tab')) return 'Tab';
+        if (compName.includes('input')) return 'Input';
+        if (compName.includes('card') || compName.includes('item')) return 'ListItem';
+      } catch {
+        // Fallback to instance name
+        const compName = (inst.name || '').toLowerCase();
+        if (compName.includes('button') || compName.includes('btn')) return 'Button';
+        if (compName.includes('tab')) return 'Tab';
+        if (compName.includes('input')) return 'Input';
+        if (compName.includes('card') || compName.includes('item')) return 'ListItem';
+      }
     }
     return n.type;
   }
 
-  function getComponentName(n: SceneNode): string | undefined {
+  async function getComponentName(n: SceneNode): Promise<string | undefined> {
     if (n.type === 'INSTANCE') {
       const inst = n as InstanceNode;
-      return inst.mainComponent?.name || inst.name;
+      try {
+        const mainComponent = await inst.getMainComponentAsync();
+        return mainComponent?.name || inst.name;
+      } catch {
+        return inst.name;
+      }
     }
     if (n.type === 'COMPONENT') {
       return n.name;
@@ -200,7 +267,7 @@ export function scanSelectedInteractiveNodes(): InteractiveNodeInfo[] {
 
   for (const n of nodes) {
     const frameName = nearestFrameName(n);
-    const elementType = inferType(n);
+    const elementType = await inferType(n);
 
     // Get text content from this element
     let text: string | undefined;
@@ -217,7 +284,7 @@ export function scanSelectedInteractiveNodes(): InteractiveNodeInfo[] {
     // Get surrounding context
     const siblingTexts = getSiblingTexts(n);
     const pageContextTexts = getPageContextTexts(n);
-    const componentName = getComponentName(n);
+    const componentName = await getComponentName(n);
 
     results.push({
       nodeId: n.id,
@@ -237,7 +304,7 @@ export function scanSelectedInteractiveNodes(): InteractiveNodeInfo[] {
 /** Export a node as base64 PNG screenshot */
 export async function exportNodeAsBase64(nodeId: string, maxSize: number = 512): Promise<string | null> {
   try {
-    const node = figma.getNodeById(nodeId);
+    const node = await figma.getNodeByIdAsync(nodeId);
     if (!node || !('exportAsync' in node)) return null;
     
     const exportNode = node as SceneNode & { exportAsync: (settings: ExportSettings) => Promise<Uint8Array> };
@@ -266,8 +333,8 @@ export async function exportNodeAsBase64(nodeId: string, maxSize: number = 512):
 }
 
 /** Get the root frame (page/screen) containing a node */
-export function getRootFrame(nodeId: string): FrameNode | null {
-  const node = figma.getNodeById(nodeId);
+export async function getRootFrame(nodeId: string): Promise<FrameNode | null> {
+  const node = await figma.getNodeByIdAsync(nodeId);
   if (!node) return null;
   
   let p: BaseNode | null = node;
@@ -349,7 +416,7 @@ export interface PageScanResult {
 }
 
 /** Scan a Frame and find all interactive elements (legacy - no longer primary method) */
-export function scanFrameForInteractiveElements(): PageScanResult | null {
+export async function scanFrameForInteractiveElements(): Promise<PageScanResult | null> {
   const selection = figma.currentPage.selection;
   
   if (selection.length === 0) {
@@ -423,7 +490,7 @@ export function scanFrameForInteractiveElements(): PageScanResult | null {
     return undefined;
   }
   
-  function getElementType(node: SceneNode): string {
+  async function getElementType(node: SceneNode): Promise<string> {
     const name = (node.name || '').toLowerCase();
     
     if (name.includes('button') || name.includes('btn')) return 'Button';
@@ -438,20 +505,35 @@ export function scanFrameForInteractiveElements(): PageScanResult | null {
     
     if (node.type === 'INSTANCE') {
       const inst = node as InstanceNode;
-      const compName = (inst.mainComponent?.name || '').toLowerCase();
-      if (compName.includes('button') || compName.includes('btn')) return 'Button';
-      if (compName.includes('tab')) return 'Tab';
-      if (compName.includes('input')) return 'Input';
-      if (compName.includes('toggle')) return 'Toggle';
+      try {
+        const mainComponent = await inst.getMainComponentAsync();
+        const compName = (mainComponent?.name || '').toLowerCase();
+        if (compName.includes('button') || compName.includes('btn')) return 'Button';
+        if (compName.includes('tab')) return 'Tab';
+        if (compName.includes('input')) return 'Input';
+        if (compName.includes('toggle')) return 'Toggle';
+      } catch {
+        // Fallback to instance name
+        const compName = (inst.name || '').toLowerCase();
+        if (compName.includes('button') || compName.includes('btn')) return 'Button';
+        if (compName.includes('tab')) return 'Tab';
+        if (compName.includes('input')) return 'Input';
+        if (compName.includes('toggle')) return 'Toggle';
+      }
     }
     
     return node.type;
   }
   
-  function getComponentName(node: SceneNode): string | undefined {
+  async function getComponentName(node: SceneNode): Promise<string | undefined> {
     if (node.type === 'INSTANCE') {
       const inst = node as InstanceNode;
-      return inst.mainComponent?.name || inst.name;
+      try {
+        const mainComponent = await inst.getMainComponentAsync();
+        return mainComponent?.name || inst.name;
+      } catch {
+        return inst.name;
+      }
     }
     if (node.type === 'COMPONENT') {
       return node.name;
@@ -490,9 +572,9 @@ export function scanFrameForInteractiveElements(): PageScanResult | null {
       interactiveElements.push({
         nodeId: node.id,
         nodeName: node.name,
-        elementType: getElementType(node),
+        elementType: await getElementType(node),
         text: getTextFromNode(node),
-        componentName: getComponentName(node),
+        componentName: await getComponentName(node),
         depth: getDepth(node),
       });
     }

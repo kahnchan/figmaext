@@ -5,47 +5,98 @@
 function isFrame(node) {
     return node.type === 'FRAME';
 }
+function isContainerNode(node) {
+    return node.type === 'FRAME' ||
+        node.type === 'COMPONENT' ||
+        node.type === 'INSTANCE' ||
+        node.type === 'GROUP';
+}
+function getContainerNode(node) {
+    // If the node itself is a container, use it
+    if (isContainerNode(node)) {
+        return node;
+    }
+    // Otherwise, find the nearest parent container
+    let p = node.parent;
+    while (p) {
+        if (p.type === 'FRAME' || p.type === 'COMPONENT' || p.type === 'INSTANCE' || p.type === 'GROUP') {
+            return p;
+        }
+        p = p.parent;
+    }
+    return null;
+}
 function uniq(arr) {
     return Array.from(new Set(arr)).filter(Boolean);
 }
-async function scanSelectedFrame() {
+async function scanSelectedFrame(includeScreenshots = true) {
     const selection = figma.currentPage.selection;
     if (selection.length === 0)
         return null;
-    // Support both single and multiple frame selection
-    const frames = [];
+    // Support selection of any container type: Frame, Component, Instance, Group
+    const containers = [];
     for (const node of selection) {
-        if (isFrame(node)) {
-            frames.push(node);
+        const container = getContainerNode(node);
+        if (container) {
+            // Avoid duplicates
+            if (!containers.find(c => c.id === container.id)) {
+                containers.push(container);
+            }
         }
     }
-    if (frames.length === 0)
+    if (containers.length === 0)
         return null;
-    // Scan all selected frames
-    const frameDataList = await Promise.all(frames.map(async (frame, index) => {
-        var _a, _b;
+    // Scan all selected containers (frames, components, instances, groups)
+    const frameDataList = await Promise.all(containers.map(async (container, index) => {
+        var _a;
         const texts = [];
         const componentNames = [];
-        const descendants = frame.findAll(() => true);
-        for (const d of descendants) {
-            if (d.type === 'TEXT') {
-                const t = (_a = d.characters) === null || _a === void 0 ? void 0 : _a.trim();
-                if (t)
-                    texts.push(t);
+        // Get container name
+        let containerName = container.name;
+        if (container.type === 'INSTANCE') {
+            const inst = container;
+            try {
+                const mainComponent = await inst.getMainComponentAsync();
+                containerName = (mainComponent === null || mainComponent === void 0 ? void 0 : mainComponent.name) || inst.name;
+                if (mainComponent)
+                    componentNames.push(mainComponent.name);
             }
-            if (d.type === 'INSTANCE') {
-                const inst = d;
-                componentNames.push(((_b = inst.mainComponent) === null || _b === void 0 ? void 0 : _b.name) || inst.name);
-            }
-            if (d.type === 'COMPONENT') {
-                componentNames.push(d.name);
+            catch (_b) {
+                containerName = inst.name;
             }
         }
-        // Capture screenshot for PRD documentation
-        const screenshotBase64 = await exportNodeAsBase64(frame.id, 800);
+        else if (container.type === 'COMPONENT') {
+            componentNames.push(container.name);
+        }
+        // Find all descendants (if the container supports findAll)
+        if ('findAll' in container) {
+            const descendants = container.findAll(() => true);
+            for (const d of descendants) {
+                if (d.type === 'TEXT') {
+                    const t = (_a = d.characters) === null || _a === void 0 ? void 0 : _a.trim();
+                    if (t)
+                        texts.push(t);
+                }
+                if (d.type === 'INSTANCE') {
+                    const inst = d;
+                    try {
+                        const mainComponent = await inst.getMainComponentAsync();
+                        componentNames.push((mainComponent === null || mainComponent === void 0 ? void 0 : mainComponent.name) || inst.name);
+                    }
+                    catch (_c) {
+                        componentNames.push(inst.name);
+                    }
+                }
+                if (d.type === 'COMPONENT') {
+                    componentNames.push(d.name);
+                }
+            }
+        }
+        // Capture screenshot for PRD documentation (optional for performance)
+        const screenshotBase64 = includeScreenshots ? await exportNodeAsBase64(container.id, 800) : undefined;
         return {
-            frameId: frame.id,
-            frameName: frame.name,
+            frameId: container.id,
+            frameName: containerName,
             texts: uniq(texts).slice(0, 120),
             componentNames: uniq(componentNames).slice(0, 120),
             order: index,
@@ -124,7 +175,7 @@ function getPageContextTexts(node) {
     }
     return uniq(texts).slice(0, 50); // Limit to 50 texts for context
 }
-function scanSelectedInteractiveNodes() {
+async function scanSelectedInteractiveNodes() {
     const selection = figma.currentPage.selection;
     const nodes = selection.length > 0 ? selection : [];
     function nearestFrameName(n) {
@@ -136,8 +187,7 @@ function scanSelectedInteractiveNodes() {
         }
         return 'UnknownPage';
     }
-    function inferType(n) {
-        var _a;
+    async function inferType(n) {
         const name = (n.name || '').toLowerCase();
         if (n.type === 'TEXT')
             return 'Text';
@@ -157,23 +207,43 @@ function scanSelectedInteractiveNodes() {
             return 'ListItem';
         if (n.type === 'INSTANCE') {
             const inst = n;
-            const compName = (((_a = inst.mainComponent) === null || _a === void 0 ? void 0 : _a.name) || inst.name || '').toLowerCase();
-            if (compName.includes('button') || compName.includes('btn'))
-                return 'Button';
-            if (compName.includes('tab'))
-                return 'Tab';
-            if (compName.includes('input'))
-                return 'Input';
-            if (compName.includes('card') || compName.includes('item'))
-                return 'ListItem';
+            try {
+                const mainComponent = await inst.getMainComponentAsync();
+                const compName = ((mainComponent === null || mainComponent === void 0 ? void 0 : mainComponent.name) || inst.name || '').toLowerCase();
+                if (compName.includes('button') || compName.includes('btn'))
+                    return 'Button';
+                if (compName.includes('tab'))
+                    return 'Tab';
+                if (compName.includes('input'))
+                    return 'Input';
+                if (compName.includes('card') || compName.includes('item'))
+                    return 'ListItem';
+            }
+            catch (_a) {
+                // Fallback to instance name
+                const compName = (inst.name || '').toLowerCase();
+                if (compName.includes('button') || compName.includes('btn'))
+                    return 'Button';
+                if (compName.includes('tab'))
+                    return 'Tab';
+                if (compName.includes('input'))
+                    return 'Input';
+                if (compName.includes('card') || compName.includes('item'))
+                    return 'ListItem';
+            }
         }
         return n.type;
     }
-    function getComponentName(n) {
-        var _a;
+    async function getComponentName(n) {
         if (n.type === 'INSTANCE') {
             const inst = n;
-            return ((_a = inst.mainComponent) === null || _a === void 0 ? void 0 : _a.name) || inst.name;
+            try {
+                const mainComponent = await inst.getMainComponentAsync();
+                return (mainComponent === null || mainComponent === void 0 ? void 0 : mainComponent.name) || inst.name;
+            }
+            catch (_a) {
+                return inst.name;
+            }
         }
         if (n.type === 'COMPONENT') {
             return n.name;
@@ -183,7 +253,7 @@ function scanSelectedInteractiveNodes() {
     const results = [];
     for (const n of nodes) {
         const frameName = nearestFrameName(n);
-        const elementType = inferType(n);
+        const elementType = await inferType(n);
         // Get text content from this element
         let text;
         if (n.type === 'TEXT') {
@@ -199,7 +269,7 @@ function scanSelectedInteractiveNodes() {
         // Get surrounding context
         const siblingTexts = getSiblingTexts(n);
         const pageContextTexts = getPageContextTexts(n);
-        const componentName = getComponentName(n);
+        const componentName = await getComponentName(n);
         results.push({
             nodeId: n.id,
             nodeName: n.name,
@@ -216,7 +286,7 @@ function scanSelectedInteractiveNodes() {
 /** Export a node as base64 PNG screenshot */
 async function exportNodeAsBase64(nodeId, maxSize = 512) {
     try {
-        const node = figma.getNodeById(nodeId);
+        const node = await figma.getNodeByIdAsync(nodeId);
         if (!node || !('exportAsync' in node))
             return null;
         const exportNode = node;
@@ -242,8 +312,8 @@ async function exportNodeAsBase64(nodeId, maxSize = 512) {
     }
 }
 /** Get the root frame (page/screen) containing a node */
-function getRootFrame(nodeId) {
-    const node = figma.getNodeById(nodeId);
+async function getRootFrame(nodeId) {
+    const node = await figma.getNodeByIdAsync(nodeId);
     if (!node)
         return null;
     let p = node;
@@ -299,7 +369,7 @@ function isInteractiveContainer(node) {
     return false;
 }
 /** Scan a Frame and find all interactive elements (legacy - no longer primary method) */
-function scanFrameForInteractiveElements() {
+async function scanFrameForInteractiveElements() {
     var _a;
     const selection = figma.currentPage.selection;
     if (selection.length === 0) {
@@ -363,8 +433,7 @@ function scanFrameForInteractiveElements() {
         }
         return undefined;
     }
-    function getElementType(node) {
-        var _a;
+    async function getElementType(node) {
         const name = (node.name || '').toLowerCase();
         if (name.includes('button') || name.includes('btn'))
             return 'Button';
@@ -386,23 +455,43 @@ function scanFrameForInteractiveElements() {
             return 'IconButton';
         if (node.type === 'INSTANCE') {
             const inst = node;
-            const compName = (((_a = inst.mainComponent) === null || _a === void 0 ? void 0 : _a.name) || '').toLowerCase();
-            if (compName.includes('button') || compName.includes('btn'))
-                return 'Button';
-            if (compName.includes('tab'))
-                return 'Tab';
-            if (compName.includes('input'))
-                return 'Input';
-            if (compName.includes('toggle'))
-                return 'Toggle';
+            try {
+                const mainComponent = await inst.getMainComponentAsync();
+                const compName = ((mainComponent === null || mainComponent === void 0 ? void 0 : mainComponent.name) || '').toLowerCase();
+                if (compName.includes('button') || compName.includes('btn'))
+                    return 'Button';
+                if (compName.includes('tab'))
+                    return 'Tab';
+                if (compName.includes('input'))
+                    return 'Input';
+                if (compName.includes('toggle'))
+                    return 'Toggle';
+            }
+            catch (_a) {
+                // Fallback to instance name
+                const compName = (inst.name || '').toLowerCase();
+                if (compName.includes('button') || compName.includes('btn'))
+                    return 'Button';
+                if (compName.includes('tab'))
+                    return 'Tab';
+                if (compName.includes('input'))
+                    return 'Input';
+                if (compName.includes('toggle'))
+                    return 'Toggle';
+            }
         }
         return node.type;
     }
-    function getComponentName(node) {
-        var _a;
+    async function getComponentName(node) {
         if (node.type === 'INSTANCE') {
             const inst = node;
-            return ((_a = inst.mainComponent) === null || _a === void 0 ? void 0 : _a.name) || inst.name;
+            try {
+                const mainComponent = await inst.getMainComponentAsync();
+                return (mainComponent === null || mainComponent === void 0 ? void 0 : mainComponent.name) || inst.name;
+            }
+            catch (_a) {
+                return inst.name;
+            }
         }
         if (node.type === 'COMPONENT') {
             return node.name;
@@ -438,9 +527,9 @@ function scanFrameForInteractiveElements() {
             interactiveElements.push({
                 nodeId: node.id,
                 nodeName: node.name,
-                elementType: getElementType(node),
+                elementType: await getElementType(node),
                 text: getTextFromNode(node),
-                componentName: getComponentName(node),
+                componentName: await getComponentName(node),
                 depth: getDepth(node),
             });
         }
@@ -458,7 +547,7 @@ function scanFrameForInteractiveElements() {
 ;// ./src/shared/prd_kb.json
 const prd_kb_namespaceObject = /*#__PURE__*/JSON.parse('[{"feature":"收藏代币","background":"用户需要快速访问常用交易对，提高交易效率。","logic":"用户可在市场列表对交易对进行收藏/取消收藏；收藏列表只展示收藏项；收藏状态在页面切换时保持。","ac":"- 在市场列表页可收藏/取消收藏\\n- 收藏Tab只显示已收藏交易对\\n- 收藏为空时展示空态提示\\n- 收藏状态跨会话持久化（如本地/服务端）","keywords":["收藏","市场","交易对","tab","星标"]},{"feature":"价格提醒","background":"用户希望在价格达到阈值时收到提醒。","logic":"支持设置上/下穿阈值；提醒触发后可查看详情并关闭。","ac":"- 支持新增/删除提醒\\n- 支持上穿/下穿\\n- 触发后可跳转到交易页","keywords":["提醒","阈值","通知"]}]');
 ;// ./src/plugin/openrouter.ts
-async function openRouterChat(settings, messages) {
+async function openrouter_openRouterChat(settings, messages) {
     var _a, _b, _c;
     if (!settings.openRouterApiKey) {
         throw new Error('Missing OpenRouter API Key. Please set it in Settings.');
@@ -490,7 +579,7 @@ async function openRouterChat(settings, messages) {
     return content;
 }
 /** Check if the model supports vision */
-function isVisionModel(model) {
+function openrouter_isVisionModel(model) {
     const visionModels = [
         'openai/gpt-4o',
         'openai/gpt-4-vision',
@@ -580,9 +669,15 @@ async function syncPRD(settings, context, additionalPrompt) {
 4. 列出至少 5 个边缘情况及处理方式
 5. 使用丰富的 Markdown 格式提升可读性
 
+**重要要求：**
+- 功能名称必须使用中文
+- 只返回 JSON 格式，不要包含其他文本
+- markdown 字段中不要包含 JSON 结构，只包含纯 Markdown 内容
+- 不要在 markdown 中显示 "Matched: ..." 或 matchedSections 信息
+
 **PRD文档结构（按此顺序）：**
 
-# [功能名称]
+# [功能名称（必须用中文）]
 
 ## 背景
 简要说明：为什么要做这个功能，当前存在什么问题或机会
@@ -816,6 +911,12 @@ async function syncPRD(settings, context, additionalPrompt) {
 - ✅ 可读性：中英文混排时加空格，使用表格组织信息
 - ✅ 必须使用中文
 
+**重要要求：**
+- 功能名称必须使用中文
+- 只返回 JSON 格式，不要包含其他文本
+- markdown 字段中不要包含 JSON 结构，只包含纯 Markdown 内容
+- 不要在 markdown 中显示 "Matched: ..." 或 matchedSections 信息
+
 你的任务：分析 UI 设计，生成一份面向开发的 PRD 文档，包含：
 
 ## 文档结构（按此顺序）：
@@ -876,19 +977,29 @@ async function syncPRD(settings, context, additionalPrompt) {
         promptData.additionalRequirements = `用户的补充要求：${additionalPrompt.trim()}`;
     }
     const userPrompt = JSON.stringify(promptData, null, 2);
-    const raw = await openRouterChat(settings, [
+    const raw = await openrouter_openRouterChat(settings, [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
     ]);
-    // Extract JSON object from raw (models sometimes wrap)
-    const match = raw.match(/\{[\s\S]*\}/);
+    // Extract JSON from response
+    const jsonPattern = /\{[\s\S]*?\}/;
+    const match = raw.match(jsonPattern);
     const jsonText = match ? match[0] : raw;
     try {
         const parsed = JSON.parse(jsonText);
-        const featureName = String(parsed.featureName ||
+        const aiFeatureName = String(parsed.featureName ||
             (isMultiFrame ? `${context.frames[0].frameName} Flow` : context.frameName) ||
             'Unknown Feature');
         let markdown = String(parsed.markdown || raw);
+        // Simple cleanup - just remove obvious JSON artifacts
+        markdown = markdown.replace(/^\s*\{[\s\S]*?"markdown"\s*:\s*"/, '');
+        markdown = markdown.replace(/",?\s*"matchedSections"[\s\S]*?\}\s*$/, '');
+        markdown = markdown.replace(/\\n/g, '\n').replace(/\\"/g, '"');
+        // Clean up whitespace
+        markdown = markdown.replace(/\n{3,}/g, '\n\n').trim();
+        let finalFeatureName = aiFeatureName;
+        // Final cleanup
+        markdown = markdown.replace(/\n{3,}/g, '\n\n').trim();
         // 替换截图占位符为真实的 base64 图片
         if (context.frames) {
             context.frames.forEach((frame, idx) => {
@@ -900,7 +1011,7 @@ async function syncPRD(settings, context, additionalPrompt) {
             });
         }
         return {
-            featureName,
+            featureName: finalFeatureName,
             markdown,
             matchedSections: Array.isArray(parsed.matchedSections) ? parsed.matchedSections.map(String) : [],
         };
@@ -930,7 +1041,7 @@ async function syncPRD(settings, context, additionalPrompt) {
 
 ;// ./src/plugin/tracker.ts
 
-const VISION_SYSTEM_PROMPT = `You are an expert Product Manager analyzing a **Web3 Wallet App** UI to generate precise tracking events.
+const VISION_SYSTEM_PROMPT = (/* unused pure expression or super */ null && (`You are an expert Product Manager analyzing a **Web3 Wallet App** UI to generate precise tracking events.
 
 I will show you:
 1. A screenshot of the FULL PAGE/SCREEN for business context
@@ -1103,8 +1214,8 @@ REMEMBER:
 - Understand the BUSINESS CONTEXT deeply, not just UI elements
 - Category = business function, not page name
 - Trigger condition = business scenario with user intent
-- **Focus on WHY users do this, not just WHAT they click**`;
-const TEXT_SYSTEM_PROMPT = `You are a Product Manager analyzing a **Web3 Wallet App** to generate precise tracking events.
+- **Focus on WHY users do this, not just WHAT they click**`));
+const TEXT_SYSTEM_PROMPT = (/* unused pure expression or super */ null && (`You are a Product Manager analyzing a **Web3 Wallet App** to generate precise tracking events.
 
 Deeply understand the business context from element texts and page context.
 
@@ -1174,7 +1285,7 @@ Examples:
 }
 \`\`\`
 
-**Focus on business understanding over UI description.**`;
+**Focus on business understanding over UI description.**`));
 async function generateTrackingForNode(settings, input) {
     const useVision = isVisionModel(settings.model) && input.pageScreenshotBase64;
     let messages;
@@ -1394,8 +1505,8 @@ function inferPropertiesFromContext(texts) {
     }
     return props.slice(0, 5);
 }
-function attachTrackingToLayer(nodeId, event) {
-    const node = figma.getNodeById(nodeId);
+async function attachTrackingToLayer(nodeId, event) {
+    const node = await figma.getNodeByIdAsync(nodeId);
     if (!node)
         throw new Error('Node not found');
     if (!('setPluginData' in node))
@@ -1409,8 +1520,8 @@ function attachTrackingToLayer(nodeId, event) {
         verified: event.verified,
     }));
 }
-function readTrackingFromLayer(nodeId) {
-    const node = figma.getNodeById(nodeId);
+async function readTrackingFromLayer(nodeId) {
+    const node = await figma.getNodeByIdAsync(nodeId);
     if (!node)
         return null;
     if (!('getPluginData' in node))
@@ -1550,7 +1661,7 @@ Examples:
  * and generate tracking events. Element names are provided as hints (low weight).
  */
 async function analyzePageWithVision(settings, input) {
-    if (!isVisionModel(settings.model)) {
+    if (!openrouter_isVisionModel(settings.model)) {
         throw new Error('请使用支持 Vision 的模型（如 Claude 3.5 Sonnet, GPT-4o, Gemini）');
     }
     if (!input.pageScreenshotBase64) {
@@ -1591,7 +1702,7 @@ Output JSON array. Be comprehensive - identify ALL clickable/interactive element
         { role: 'system', content: VISION_PAGE_ANALYSIS_PROMPT },
         { role: 'user', content: contentParts },
     ];
-    const raw = await openRouterChat(settings, messages);
+    const raw = await openrouter_openRouterChat(settings, messages);
     console.log('[Vision Analysis] Raw AI response length:', raw.length);
     const jsonText = extractJsonArray(raw);
     if (!jsonText) {
@@ -1708,9 +1819,16 @@ async function scanTextNodesMultiFrame(frameIds) {
     const texts = [];
     let filteredCount = 0;
     for (const frameId of frameIds) {
-        const frame = figma.getNodeById(frameId);
-        if (!frame || frame.type !== 'FRAME')
+        const container = await figma.getNodeByIdAsync(frameId);
+        if (!container)
             continue;
+        // Support FRAME, COMPONENT, INSTANCE, GROUP
+        if (container.type !== 'FRAME' &&
+            container.type !== 'COMPONENT' &&
+            container.type !== 'INSTANCE' &&
+            container.type !== 'GROUP') {
+            continue;
+        }
         function traverse(node, frameName) {
             if (node.type === 'TEXT') {
                 const content = node.characters.trim();
@@ -1732,13 +1850,13 @@ async function scanTextNodesMultiFrame(frameIds) {
                 }
             }
         }
-        traverse(frame, frame.name);
+        traverse(container, container.name);
     }
     return { texts, filteredCount };
 }
 // Export node as base64 screenshot (reusing from scan.ts)
 async function i18n_exportNodeAsBase64(nodeId, maxWidth = 1200) {
-    const node = figma.getNodeById(nodeId);
+    const node = await figma.getNodeByIdAsync(nodeId);
     if (!node || !('exportAsync' in node))
         return null;
     try {
@@ -1836,7 +1954,7 @@ DO generate keys for:
             }
         });
     }
-    const response = await openRouterChat(settings, [
+    const response = await openrouter_openRouterChat(settings, [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userContent },
     ]);
@@ -2081,11 +2199,12 @@ const DEFAULT_SETTINGS = {
     model: 'anthropic/claude-3.5-sonnet',
 };
 let settings = DEFAULT_SETTINGS;
-let autoSync = true;
+let autoSync = false;
 let mode = 'prd';
 let lastContextKey = '';
 let trackingEvents = [];
 let i18nKeys = [];
+let scanTimeout = null;
 figma.showUI(__html__, { width: 420, height: 720, themeColors: true });
 function post(msg) {
     figma.ui.postMessage(msg);
@@ -2093,7 +2212,7 @@ function post(msg) {
 async function loadState() {
     var _a;
     settings = (await figma.clientStorage.getAsync(STORAGE_SETTINGS)) || DEFAULT_SETTINGS;
-    autoSync = (_a = (await figma.clientStorage.getAsync(STORAGE_AUTOSYNC))) !== null && _a !== void 0 ? _a : true;
+    autoSync = (_a = (await figma.clientStorage.getAsync(STORAGE_AUTOSYNC))) !== null && _a !== void 0 ? _a : false;
     mode = (await figma.clientStorage.getAsync(STORAGE_MODE)) || 'prd';
     trackingEvents = (await figma.clientStorage.getAsync(STORAGE_TRACKING)) || [];
 }
@@ -2115,21 +2234,75 @@ function makeContextKey(ctx) {
     // Legacy single frame
     return `${ctx.frameId}:${(_a = ctx.texts) === null || _a === void 0 ? void 0 : _a.join('|').slice(0, 500)}:${(_b = ctx.componentNames) === null || _b === void 0 ? void 0 : _b.join('|').slice(0, 500)}`;
 }
-async function pushScanContext() {
-    const ctx = await scanSelectedFrame();
-    post({ type: 'SCAN_CONTEXT', context: ctx });
-    if (!ctx)
+// Fast lightweight scan for UI updates
+async function pushScanContextFast() {
+    const selection = figma.currentPage.selection;
+    if (selection.length === 0) {
+        post({ type: 'SCAN_CONTEXT', context: null });
         return;
-    const key = makeContextKey(ctx);
-    if (key === lastContextKey)
-        return;
-    lastContextKey = key;
-    if (autoSync && mode === 'prd') {
-        await doSyncPRD(undefined, ctx);
     }
+    // Quick scan - just get basic info without expensive operations
+    const containers = [];
+    for (const node of selection) {
+        if (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE' || node.type === 'GROUP') {
+            containers.push(node);
+        }
+    }
+    if (containers.length === 0) {
+        post({ type: 'SCAN_CONTEXT', context: null });
+        return;
+    }
+    // Create lightweight context for UI (no text scanning, no screenshots)
+    const frames = containers.map((container, index) => ({
+        frameId: container.id,
+        frameName: container.name,
+        texts: [], // Empty for fast scan
+        componentNames: [], // Empty for fast scan  
+        order: index,
+    }));
+    const lightContext = {
+        frames,
+        frameId: frames[0].frameId,
+        frameName: frames[0].frameName,
+        texts: [],
+        componentNames: [],
+    };
+    post({ type: 'SCAN_CONTEXT', context: lightContext });
+}
+// Full scan with debouncing for expensive operations
+async function pushScanContext() {
+    // Clear any existing timeout
+    if (scanTimeout) {
+        clearTimeout(scanTimeout);
+    }
+    // Do fast scan immediately for UI responsiveness
+    await pushScanContextFast();
+    // Debounce the expensive full scan
+    scanTimeout = setTimeout(async () => {
+        try {
+            // Fast scan without screenshots for UI update
+            const ctx = await scanSelectedFrame(false);
+            if (ctx) {
+                post({ type: 'SCAN_CONTEXT', context: ctx });
+                const key = makeContextKey(ctx);
+                if (key !== lastContextKey) {
+                    lastContextKey = key;
+                    // Only generate screenshots if autoSync PRD is enabled
+                    if (autoSync && mode === 'prd') {
+                        const ctxWithScreenshots = await scanSelectedFrame(true);
+                        await doSyncPRD(undefined, ctxWithScreenshots);
+                    }
+                }
+            }
+        }
+        catch (e) {
+            console.error('Full scan error:', e);
+        }
+        scanTimeout = null;
+    }, 500); // 500ms debounce
 }
 async function doSyncPRD(additionalPrompt, ctx) {
-    const context = ctx || await scanSelectedFrame();
+    const context = ctx || await scanSelectedFrame(true); // Always include screenshots for PRD generation
     if (!context) {
         post({ type: 'PRD_RESULT', result: null });
         return;
@@ -2158,97 +2331,33 @@ async function doSyncPRD(additionalPrompt, ctx) {
 function simpleId() {
     return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
-async function doGenerateTracking() {
-    const nodes = scanSelectedInteractiveNodes();
-    if (nodes.length === 0) {
-        post({ type: 'ERROR', message: '请选择至少一个元素（按钮/Tab/Input 等）' });
-        return;
-    }
-    // Show loading in UI
-    post({
-        type: 'LOADING_STATUS',
-        status: {
-            isLoading: true,
-            message: `正在为 ${nodes.length} 个元素生成埋点...`,
-            progress: { current: 0, total: nodes.length }
-        }
-    });
-    figma.notify(`正在为 ${nodes.length} 个元素生成埋点...`);
-    const next = [];
-    for (let i = 0; i < nodes.length; i++) {
-        const n = nodes[i];
-        const existing = readTrackingFromLayer(n.nodeId);
-        try {
-            // Update progress
-            post({
-                type: 'LOADING_STATUS',
-                status: {
-                    isLoading: true,
-                    message: `AI 正在分析元素 ${i + 1}/${nodes.length}`,
-                    progress: { current: i + 1, total: nodes.length }
-                }
-            });
-            if (nodes.length > 1) {
-                figma.notify(`AI 正在分析第 ${i + 1}/${nodes.length} 个元素...`);
-            }
-            // Get screenshot of the element
-            const screenshotBase64 = await exportNodeAsBase64(n.nodeId, 256);
-            // Get screenshot of the parent page/frame for context
-            const rootFrame = getRootFrame(n.nodeId);
-            const pageScreenshotBase64 = rootFrame ? await exportNodeAsBase64(rootFrame.id, 800) : undefined;
-            const ai = await generateTrackingForNode(settings, Object.assign(Object.assign({}, n), { screenshotBase64: screenshotBase64 || undefined, pageScreenshotBase64: pageScreenshotBase64 || undefined, platform: 'App' }));
-            next.push({
-                id: simpleId(),
-                nodeId: n.nodeId,
-                nodeName: n.nodeName,
-                parentFrameName: n.parentFrameName,
-                elementType: ai.elementType,
-                eventName: (existing === null || existing === void 0 ? void 0 : existing.eventName) || ai.eventName,
-                eventDisplayName: (existing === null || existing === void 0 ? void 0 : existing.eventDisplayName) || ai.eventDisplayName,
-                category: (existing === null || existing === void 0 ? void 0 : existing.category) || ai.category,
-                triggerCondition: (existing === null || existing === void 0 ? void 0 : existing.triggerCondition) || ai.triggerCondition,
-                properties: (existing === null || existing === void 0 ? void 0 : existing.properties) || ai.properties,
-                verified: (existing === null || existing === void 0 ? void 0 : existing.verified) || false,
-            });
-        }
-        catch (e) {
-            next.push({
-                id: simpleId(),
-                nodeId: n.nodeId,
-                nodeName: n.nodeName,
-                parentFrameName: n.parentFrameName,
-                elementType: n.elementType,
-                eventName: `tap${n.nodeName.replace(/[^a-zA-Z]/g, '')}`,
-                eventDisplayName: `${n.nodeName} 点击`,
-                category: 'Wallet',
-                triggerCondition: '用户点击时触发',
-                properties: [],
-                verified: false,
-            });
-        }
-    }
-    trackingEvents = next;
-    await saveTrackingEvents();
-    // Hide loading
-    post({ type: 'LOADING_STATUS', status: { isLoading: false } });
-    figma.notify(`✓ 已为 ${next.length} 个元素生成埋点`);
-}
 async function doScanPageForTracking() {
     var _a, _b;
-    const selection = figma.currentPage.selection;
-    if (selection.length === 0) {
-        post({ type: 'ERROR', message: '请选择一个 Frame（整个页面/屏幕）' });
+    // Check API key first
+    if (!settings.openRouterApiKey) {
+        post({ type: 'ERROR', message: '请先在设置中配置 OpenRouter API Key' });
+        figma.notify('❌ 请先配置 API Key', { error: true });
         return;
     }
-    // Find the frame to analyze
-    let frameToAnalyze = null;
-    const selectedNode = selection[0];
-    if (selectedNode.type === 'FRAME') {
-        frameToAnalyze = selectedNode;
+    // Use scanSelectedFrame to match the UI context state
+    const context = await scanSelectedFrame();
+    if (!context) {
+        post({ type: 'ERROR', message: '请选择一个 Frame（整个页面/屏幕）' });
+        figma.notify('❌ 请选择 Frame 后再点击', { error: true });
+        return;
     }
-    else {
-        // Find parent frame
-        let p = selectedNode.parent;
+    // Find the first frame to analyze from current selection (not from context)
+    // This ensures we use the most current selection
+    const selection = figma.currentPage.selection;
+    let frameToAnalyze = null;
+    // Look for a frame in current selection
+    for (const node of selection) {
+        if (node.type === 'FRAME') {
+            frameToAnalyze = node;
+            break;
+        }
+        // Also check parent frame
+        let p = node.parent;
         while (p) {
             if (p.type === 'FRAME') {
                 frameToAnalyze = p;
@@ -2256,6 +2365,8 @@ async function doScanPageForTracking() {
             }
             p = p.parent;
         }
+        if (frameToAnalyze)
+            break;
     }
     if (!frameToAnalyze) {
         post({ type: 'ERROR', message: '请选择一个 Frame（整个页面/屏幕）' });
@@ -2440,8 +2551,8 @@ figma.ui.onmessage = async (msg) => {
             await doSyncPRD(msg.additionalPrompt);
             return;
         }
-        if (msg.type === 'GENERATE_TRACKING_NOW') {
-            await doGenerateTracking();
+        if (msg.type === 'CLEAR_PRD') {
+            post({ type: 'PRD_RESULT', result: null });
             return;
         }
         if (msg.type === 'SCAN_PAGE_FOR_TRACKING') {
@@ -2525,6 +2636,12 @@ figma.ui.onmessage = async (msg) => {
             post({ type: 'I18N_KEYS', keys: i18nKeys });
             return;
         }
+        if (msg.type === 'CLEAR_I18N') {
+            i18nKeys = [];
+            post({ type: 'I18N_RESULT', result: null });
+            post({ type: 'I18N_KEYS', keys: i18nKeys });
+            return;
+        }
         if (msg.type === 'EXPORT_I18N') {
             await doExportI18n(msg.format, msg.projectName);
             return;
@@ -2547,17 +2664,27 @@ figma.on('selectionchange', () => {
 });
 // ============ i18n Helper Functions ============
 async function doGenerateI18nKeys(projectName, additionalPrompt, excludeTexts) {
+    // Check API key first
+    if (!settings.openRouterApiKey) {
+        post({ type: 'ERROR', message: '请先在设置中配置 OpenRouter API Key' });
+        figma.notify('❌ 请先配置 API Key', { error: true });
+        return;
+    }
     const selection = figma.currentPage.selection;
-    // Filter out all FRAME type nodes
-    const frames = selection.filter(node => node.type === 'FRAME');
-    if (frames.length === 0) {
-        figma.notify('请选择至少一个 Frame');
+    // Support FRAME, COMPONENT, INSTANCE, GROUP types
+    const containers = selection.filter(node => node.type === 'FRAME' ||
+        node.type === 'COMPONENT' ||
+        node.type === 'INSTANCE' ||
+        node.type === 'GROUP');
+    if (containers.length === 0) {
+        figma.notify('❌ 请选择至少一个 Frame 或组件', { error: true });
+        post({ type: 'ERROR', message: '请选择至少一个 Frame 或组件' });
         return;
     }
     try {
-        post({ type: 'LOADING_STATUS', status: { isLoading: true, message: `正在扫描 ${frames.length} 个 Frame 中的文本...` } });
-        const frameIds = frames.map(f => f.id);
-        const frameNames = frames.map(f => f.name);
+        post({ type: 'LOADING_STATUS', status: { isLoading: true, message: `正在扫描 ${containers.length} 个容器中的文本...` } });
+        const frameIds = containers.map(f => f.id);
+        const frameNames = containers.map(f => f.name);
         let { texts, filteredCount } = await scanTextNodesMultiFrame(frameIds);
         // 过滤掉用户已删除的文本
         if (excludeTexts && excludeTexts.length > 0) {
@@ -2590,7 +2717,7 @@ async function doGenerateI18nKeys(projectName, additionalPrompt, excludeTexts) {
             return;
         }
         console.log(`[i18n] Found ${texts.length} translatable texts, filtered ${filteredCount} items`);
-        post({ type: 'LOADING_STATUS', status: { isLoading: true, message: `正在导出 ${frames.length} 张截图...` } });
+        post({ type: 'LOADING_STATUS', status: { isLoading: true, message: `正在导出 ${containers.length} 张截图...` } });
         const screenshots = [];
         for (const frameId of frameIds) {
             const screenshot = await exportNodeAsBase64(frameId, 1200);
@@ -2615,9 +2742,10 @@ async function doGenerateI18nKeys(projectName, additionalPrompt, excludeTexts) {
         post({ type: 'LOADING_STATUS', status: { isLoading: false } });
         post({ type: 'I18N_RESULT', result });
         post({ type: 'I18N_KEYS', keys: i18nKeys });
+        const containerWord = containers.length === 1 ? '容器' : `${containers.length} 个容器`;
         const msg = duplicateCount > 0
-            ? `✓ 成功生成 ${uniqueKeys.length} 个 i18n keys（已去重 ${duplicateCount} 个）`
-            : `✓ 成功生成 ${uniqueKeys.length} 个 i18n keys`;
+            ? `✓ 从 ${containerWord} 生成 ${uniqueKeys.length} 个 i18n keys（已去重 ${duplicateCount} 个）`
+            : `✓ 从 ${containerWord} 生成 ${uniqueKeys.length} 个 i18n keys`;
         figma.notify(msg);
     }
     catch (e) {

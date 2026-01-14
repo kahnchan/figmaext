@@ -102,7 +102,7 @@ export type UIToPluginMessage =
   | { type: 'SET_AUTOSYNC'; enabled: boolean }
   | { type: 'SET_MODE'; mode: Mode }
   | { type: 'SYNC_PRD_NOW'; additionalPrompt?: string }
-  | { type: 'GENERATE_TRACKING_NOW' }
+  | { type: 'CLEAR_PRD' }
   | { type: 'SCAN_PAGE_FOR_TRACKING' }
   | { type: 'UPDATE_TRACKING_EVENT'; event: TrackingEvent }
   | { type: 'TOGGLE_EVENT_SELECTION'; id: string }
@@ -122,6 +122,7 @@ export type UIToPluginMessage =
   | { type: 'TOGGLE_I18N_KEY'; id: string }
   | { type: 'SELECT_ALL_I18N_KEYS'; selected: boolean }
   | { type: 'DELETE_I18N_KEY'; id: string }
+  | { type: 'CLEAR_I18N' }
   | { type: 'EXPORT_I18N'; format: 'bulkadd' | 'multicheck' | 'json' | 'csv'; projectName: string }
   | { type: 'COPY_SINGLE_ADD_COMMAND'; keyId: string; projectName: string }
   | { type: 'CREATE_I18N_TABLE' };

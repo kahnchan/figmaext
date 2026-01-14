@@ -81,9 +81,15 @@ export async function syncPRD(
 4. 列出至少 5 个边缘情况及处理方式
 5. 使用丰富的 Markdown 格式提升可读性
 
+**重要要求：**
+- 功能名称必须使用中文
+- 只返回 JSON 格式，不要包含其他文本
+- markdown 字段中不要包含 JSON 结构，只包含纯 Markdown 内容
+- 不要在 markdown 中显示 "Matched: ..." 或 matchedSections 信息
+
 **PRD文档结构（按此顺序）：**
 
-# [功能名称]
+# [功能名称（必须用中文）]
 
 ## 背景
 简要说明：为什么要做这个功能，当前存在什么问题或机会
@@ -317,6 +323,12 @@ export async function syncPRD(
 - ✅ 可读性：中英文混排时加空格，使用表格组织信息
 - ✅ 必须使用中文
 
+**重要要求：**
+- 功能名称必须使用中文
+- 只返回 JSON 格式，不要包含其他文本
+- markdown 字段中不要包含 JSON 结构，只包含纯 Markdown 内容
+- 不要在 markdown 中显示 "Matched: ..." 或 matchedSections 信息
+
 你的任务：分析 UI 设计，生成一份面向开发的 PRD 文档，包含：
 
 ## 文档结构（按此顺序）：
@@ -387,19 +399,33 @@ export async function syncPRD(
     { role: 'user', content: userPrompt },
   ]);
 
-  // Extract JSON object from raw (models sometimes wrap)
-  const match = raw.match(/\{[\s\S]*\}/);
+  // Extract JSON from response
+  const jsonPattern = /\{[\s\S]*?\}/;
+  const match = raw.match(jsonPattern);
   const jsonText = match ? match[0] : raw;
 
   try {
     const parsed = JSON.parse(jsonText);
-    const featureName = String(
+    const aiFeatureName = String(
       parsed.featureName || 
       (isMultiFrame ? `${context.frames![0].frameName} Flow` : context.frameName) || 
       'Unknown Feature'
     );
     
     let markdown = String(parsed.markdown || raw);
+    
+    // Simple cleanup - just remove obvious JSON artifacts
+    markdown = markdown.replace(/^\s*\{[\s\S]*?"markdown"\s*:\s*"/, '');
+    markdown = markdown.replace(/",?\s*"matchedSections"[\s\S]*?\}\s*$/, '');
+    markdown = markdown.replace(/\\n/g, '\n').replace(/\\"/g, '"');
+    
+    // Clean up whitespace
+    markdown = markdown.replace(/\n{3,}/g, '\n\n').trim();
+    
+    let finalFeatureName = aiFeatureName;
+    
+    // Final cleanup
+    markdown = markdown.replace(/\n{3,}/g, '\n\n').trim();
     
     // 替换截图占位符为真实的 base64 图片
     if (context.frames) {
@@ -413,7 +439,7 @@ export async function syncPRD(
     }
     
     return {
-      featureName,
+      featureName: finalFeatureName,
       markdown,
       matchedSections: Array.isArray(parsed.matchedSections) ? parsed.matchedSections.map(String) : [],
     };

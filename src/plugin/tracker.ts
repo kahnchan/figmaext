@@ -510,8 +510,8 @@ function inferPropertiesFromContext(texts: string[]): TrackingProperty[] {
   return props.slice(0, 5);
 }
 
-export function attachTrackingToLayer(nodeId: string, event: TrackingEvent): void {
-  const node = figma.getNodeById(nodeId);
+export async function attachTrackingToLayer(nodeId: string, event: TrackingEvent): Promise<void> {
+  const node = await figma.getNodeByIdAsync(nodeId);
   if (!node) throw new Error('Node not found');
   if (!('setPluginData' in node)) throw new Error('Node does not support pluginData');
 
@@ -528,10 +528,10 @@ export function attachTrackingToLayer(nodeId: string, event: TrackingEvent): voi
   );
 }
 
-export function readTrackingFromLayer(
+export async function readTrackingFromLayer(
   nodeId: string
-): Omit<TrackingEvent, 'id' | 'nodeId' | 'nodeName' | 'parentFrameName' | 'elementType'> | null {
-  const node = figma.getNodeById(nodeId);
+): Promise<Omit<TrackingEvent, 'id' | 'nodeId' | 'nodeName' | 'parentFrameName' | 'elementType'> | null> {
+  const node = await figma.getNodeByIdAsync(nodeId);
   if (!node) return null;
   if (!('getPluginData' in node)) return null;
 

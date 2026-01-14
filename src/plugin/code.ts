@@ -1,7 +1,7 @@
 /// <reference types="@figma/plugin-typings" />
 
 import type { Mode, PluginToUIMessage, Settings, TrackingEvent, UIToPluginMessage, ScanContext, I18nKey } from '@shared/messages';
-import { scanSelectedFrame, scanSelectedInteractiveNodes, exportNodeAsBase64, getRootFrame, scanFrameForInteractiveElements } from './scan';
+import { scanSelectedFrame, exportNodeAsBase64, getRootFrame, scanFrameForInteractiveElements } from './scan';
 import { syncPRD } from './prd';
 import { attachTrackingToLayer, generateTrackingForNode, readTrackingFromLayer, analyzePageWithVision, type ElementHint } from './tracker';
 import { scanTextNodesMultiFrame, generateI18nKeys, exportSingleAddCommand, exportBulkaddData, exportMultiCheckCommand, exportAsJSON, exportAsCSV, createI18nTable } from './i18n';
@@ -17,11 +17,12 @@ const DEFAULT_SETTINGS: Settings = {
 };
 
 let settings: Settings = DEFAULT_SETTINGS;
-let autoSync = true;
+let autoSync = false;
 let mode: Mode = 'prd';
 let lastContextKey = '';
 let trackingEvents: TrackingEvent[] = [];
 let i18nKeys: I18nKey[] = [];
+let scanTimeout: number | null = null;
 
 figma.showUI(__html__, { width: 420, height: 720, themeColors: true });
 
@@ -31,7 +32,7 @@ function post(msg: PluginToUIMessage) {
 
 async function loadState() {
   settings = (await figma.clientStorage.getAsync(STORAGE_SETTINGS)) || DEFAULT_SETTINGS;
-  autoSync = (await figma.clientStorage.getAsync(STORAGE_AUTOSYNC)) ?? true;
+  autoSync = (await figma.clientStorage.getAsync(STORAGE_AUTOSYNC)) ?? false;
   mode = (await figma.clientStorage.getAsync(STORAGE_MODE)) || 'prd';
   trackingEvents = (await figma.clientStorage.getAsync(STORAGE_TRACKING)) || [];
 }
@@ -55,24 +56,87 @@ function makeContextKey(ctx: ScanContext): string {
   return `${ctx.frameId}:${ctx.texts?.join('|').slice(0, 500)}:${ctx.componentNames?.join('|').slice(0, 500)}`;
 }
 
-async function pushScanContext() {
-  const ctx = await scanSelectedFrame();
-  post({ type: 'SCAN_CONTEXT', context: ctx });
-
-  if (!ctx) return;
-
-  const key = makeContextKey(ctx);
-  if (key === lastContextKey) return;
-  lastContextKey = key;
-
-  if (autoSync && mode === 'prd') {
-    await doSyncPRD(undefined, ctx);
+// Fast lightweight scan for UI updates
+async function pushScanContextFast() {
+  const selection = figma.currentPage.selection;
+  if (selection.length === 0) {
+    post({ type: 'SCAN_CONTEXT', context: null });
+    return;
   }
+
+  // Quick scan - just get basic info without expensive operations
+  const containers: Array<FrameNode | ComponentNode | InstanceNode | GroupNode> = [];
+  
+  for (const node of selection) {
+    if (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE' || node.type === 'GROUP') {
+      containers.push(node);
+    }
+  }
+  
+  if (containers.length === 0) {
+    post({ type: 'SCAN_CONTEXT', context: null });
+    return;
+  }
+
+  // Create lightweight context for UI (no text scanning, no screenshots)
+  const frames = containers.map((container, index) => ({
+    frameId: container.id,
+    frameName: container.name,
+    texts: [], // Empty for fast scan
+    componentNames: [], // Empty for fast scan  
+    order: index,
+  }));
+
+  const lightContext = {
+    frames,
+    frameId: frames[0].frameId,
+    frameName: frames[0].frameName,
+    texts: [],
+    componentNames: [],
+  };
+
+  post({ type: 'SCAN_CONTEXT', context: lightContext });
+}
+
+// Full scan with debouncing for expensive operations
+async function pushScanContext() {
+  // Clear any existing timeout
+  if (scanTimeout) {
+    clearTimeout(scanTimeout);
+  }
+
+  // Do fast scan immediately for UI responsiveness
+  await pushScanContextFast();
+
+  // Debounce the expensive full scan
+  scanTimeout = setTimeout(async () => {
+    try {
+      // Fast scan without screenshots for UI update
+      const ctx = await scanSelectedFrame(false);
+      if (ctx) {
+        post({ type: 'SCAN_CONTEXT', context: ctx });
+        
+        const key = makeContextKey(ctx);
+        if (key !== lastContextKey) {
+          lastContextKey = key;
+          
+          // Only generate screenshots if autoSync PRD is enabled
+          if (autoSync && mode === 'prd') {
+            const ctxWithScreenshots = await scanSelectedFrame(true);
+            await doSyncPRD(undefined, ctxWithScreenshots);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Full scan error:', e);
+    }
+    scanTimeout = null;
+  }, 500); // 500ms debounce
 }
 
 
 async function doSyncPRD(additionalPrompt?: string, ctx?: Awaited<ReturnType<typeof scanSelectedFrame>>) {
-  const context = ctx || await scanSelectedFrame();
+  const context = ctx || await scanSelectedFrame(true); // Always include screenshots for PRD generation
   if (!context) {
     post({ type: 'PRD_RESULT', result: null });
     return;
@@ -105,116 +169,36 @@ function simpleId(): string {
   return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-async function doGenerateTracking() {
-  const nodes = scanSelectedInteractiveNodes();
-  if (nodes.length === 0) {
-    post({ type: 'ERROR', message: '请选择至少一个元素（按钮/Tab/Input 等）' });
-    return;
-  }
-
-  // Show loading in UI
-  post({ 
-    type: 'LOADING_STATUS', 
-    status: { 
-      isLoading: true, 
-      message: `正在为 ${nodes.length} 个元素生成埋点...`,
-      progress: { current: 0, total: nodes.length }
-    } 
-  });
-
-  figma.notify(`正在为 ${nodes.length} 个元素生成埋点...`);
-
-  const next: TrackingEvent[] = [];
-
-  for (let i = 0; i < nodes.length; i++) {
-    const n = nodes[i];
-    const existing = readTrackingFromLayer(n.nodeId);
-
-    try {
-      // Update progress
-      post({ 
-        type: 'LOADING_STATUS', 
-        status: { 
-          isLoading: true, 
-          message: `AI 正在分析元素 ${i + 1}/${nodes.length}`,
-          progress: { current: i + 1, total: nodes.length }
-        } 
-      });
-      
-      if (nodes.length > 1) {
-        figma.notify(`AI 正在分析第 ${i + 1}/${nodes.length} 个元素...`);
-      }
-      
-      // Get screenshot of the element
-      const screenshotBase64 = await exportNodeAsBase64(n.nodeId, 256);
-      
-      // Get screenshot of the parent page/frame for context
-      const rootFrame = getRootFrame(n.nodeId);
-      const pageScreenshotBase64 = rootFrame ? await exportNodeAsBase64(rootFrame.id, 800) : undefined;
-
-      const ai = await generateTrackingForNode(settings, {
-        ...n,
-        screenshotBase64: screenshotBase64 || undefined,
-        pageScreenshotBase64: pageScreenshotBase64 || undefined,
-        platform: 'App',
-      });
-
-      next.push({
-        id: simpleId(),
-        nodeId: n.nodeId,
-        nodeName: n.nodeName,
-        parentFrameName: n.parentFrameName,
-        elementType: ai.elementType,
-        eventName: existing?.eventName || ai.eventName,
-        eventDisplayName: existing?.eventDisplayName || ai.eventDisplayName,
-        category: existing?.category || ai.category,
-        triggerCondition: existing?.triggerCondition || ai.triggerCondition,
-        properties: existing?.properties || ai.properties,
-        verified: existing?.verified || false,
-      });
-    } catch (e) {
-      next.push({
-        id: simpleId(),
-        nodeId: n.nodeId,
-        nodeName: n.nodeName,
-        parentFrameName: n.parentFrameName,
-        elementType: n.elementType,
-        eventName: `tap${n.nodeName.replace(/[^a-zA-Z]/g, '')}`,
-        eventDisplayName: `${n.nodeName} 点击`,
-        category: 'Wallet',
-        triggerCondition: '用户点击时触发',
-        properties: [],
-        verified: false,
-      });
-    }
-  }
-
-  trackingEvents = next;
-  await saveTrackingEvents();
-  
-  // Hide loading
-  post({ type: 'LOADING_STATUS', status: { isLoading: false } });
-  
-  figma.notify(`✓ 已为 ${next.length} 个元素生成埋点`);
-}
 
 async function doScanPageForTracking() {
-  const selection = figma.currentPage.selection;
-  
-  if (selection.length === 0) {
+  // Check API key first
+  if (!settings.openRouterApiKey) {
+    post({ type: 'ERROR', message: '请先在设置中配置 OpenRouter API Key' });
+    figma.notify('❌ 请先配置 API Key', { error: true });
+    return;
+  }
+
+  // Use scanSelectedFrame to match the UI context state
+  const context = await scanSelectedFrame();
+  if (!context) {
     post({ type: 'ERROR', message: '请选择一个 Frame（整个页面/屏幕）' });
+    figma.notify('❌ 请选择 Frame 后再点击', { error: true });
     return;
   }
   
-  // Find the frame to analyze
+  // Find the first frame to analyze from current selection (not from context)
+  // This ensures we use the most current selection
+  const selection = figma.currentPage.selection;
   let frameToAnalyze: FrameNode | null = null;
-  const selectedNode = selection[0];
   
-  if (selectedNode.type === 'FRAME') {
-    frameToAnalyze = selectedNode as FrameNode;
-  } else {
-    // Find parent frame
-    let p: BaseNode | null = selectedNode.parent;
+  // Look for a frame in current selection
+  for (const node of selection) {
+    if (node.type === 'FRAME') {
+      frameToAnalyze = node as FrameNode;
+      break;
+    }
+    // Also check parent frame
+    let p: BaseNode | null = node.parent;
     while (p) {
       if (p.type === 'FRAME') {
         frameToAnalyze = p as FrameNode;
@@ -222,6 +206,7 @@ async function doScanPageForTracking() {
       }
       p = p.parent;
     }
+    if (frameToAnalyze) break;
   }
   
   if (!frameToAnalyze) {
@@ -430,8 +415,8 @@ figma.ui.onmessage = async (msg: UIToPluginMessage) => {
       return;
     }
 
-    if (msg.type === 'GENERATE_TRACKING_NOW') {
-      await doGenerateTracking();
+    if (msg.type === 'CLEAR_PRD') {
+      post({ type: 'PRD_RESULT', result: null });
       return;
     }
 
@@ -532,6 +517,13 @@ figma.ui.onmessage = async (msg: UIToPluginMessage) => {
       return;
     }
 
+    if (msg.type === 'CLEAR_I18N') {
+      i18nKeys = [];
+      post({ type: 'I18N_RESULT', result: null });
+      post({ type: 'I18N_KEYS', keys: i18nKeys });
+      return;
+    }
+
     if (msg.type === 'EXPORT_I18N') {
       await doExportI18n(msg.format, msg.projectName);
       return;
@@ -558,21 +550,34 @@ figma.on('selectionchange', () => {
 // ============ i18n Helper Functions ============
 
 async function doGenerateI18nKeys(projectName?: string, additionalPrompt?: string, excludeTexts?: string[]) {
+  // Check API key first
+  if (!settings.openRouterApiKey) {
+    post({ type: 'ERROR', message: '请先在设置中配置 OpenRouter API Key' });
+    figma.notify('❌ 请先配置 API Key', { error: true });
+    return;
+  }
+
   const selection = figma.currentPage.selection;
   
-  // Filter out all FRAME type nodes
-  const frames = selection.filter(node => node.type === 'FRAME');
+  // Support FRAME, COMPONENT, INSTANCE, GROUP types
+  const containers = selection.filter(node => 
+    node.type === 'FRAME' || 
+    node.type === 'COMPONENT' || 
+    node.type === 'INSTANCE' || 
+    node.type === 'GROUP'
+  );
   
-  if (frames.length === 0) {
-    figma.notify('请选择至少一个 Frame');
+  if (containers.length === 0) {
+    figma.notify('❌ 请选择至少一个 Frame 或组件', { error: true });
+    post({ type: 'ERROR', message: '请选择至少一个 Frame 或组件' });
     return;
   }
 
   try {
-    post({ type: 'LOADING_STATUS', status: { isLoading: true, message: `正在扫描 ${frames.length} 个 Frame 中的文本...` } });
+    post({ type: 'LOADING_STATUS', status: { isLoading: true, message: `正在扫描 ${containers.length} 个容器中的文本...` } });
     
-    const frameIds = frames.map(f => f.id);
-    const frameNames = frames.map(f => f.name);
+    const frameIds = containers.map(f => f.id);
+    const frameNames = containers.map(f => f.name);
     let { texts, filteredCount } = await scanTextNodesMultiFrame(frameIds);
     
     // 过滤掉用户已删除的文本
@@ -610,7 +615,7 @@ async function doGenerateI18nKeys(projectName?: string, additionalPrompt?: strin
     
     console.log(`[i18n] Found ${texts.length} translatable texts, filtered ${filteredCount} items`);
     
-    post({ type: 'LOADING_STATUS', status: { isLoading: true, message: `正在导出 ${frames.length} 张截图...` } });
+    post({ type: 'LOADING_STATUS', status: { isLoading: true, message: `正在导出 ${containers.length} 张截图...` } });
     const screenshots: string[] = [];
     for (const frameId of frameIds) {
       const screenshot = await exportNodeAsBase64(frameId, 1200);
@@ -640,9 +645,10 @@ async function doGenerateI18nKeys(projectName?: string, additionalPrompt?: strin
     post({ type: 'I18N_RESULT', result });
     post({ type: 'I18N_KEYS', keys: i18nKeys });
     
+    const containerWord = containers.length === 1 ? '容器' : `${containers.length} 个容器`;
     const msg = duplicateCount > 0 
-      ? `✓ 成功生成 ${uniqueKeys.length} 个 i18n keys（已去重 ${duplicateCount} 个）`
-      : `✓ 成功生成 ${uniqueKeys.length} 个 i18n keys`;
+      ? `✓ 从 ${containerWord} 生成 ${uniqueKeys.length} 个 i18n keys（已去重 ${duplicateCount} 个）`
+      : `✓ 从 ${containerWord} 生成 ${uniqueKeys.length} 个 i18n keys`;
     figma.notify(msg);
     
   } catch (e) {
